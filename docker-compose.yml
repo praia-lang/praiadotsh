@@ -5,6 +5,8 @@ services:
       - "3080:80"
     container_name: praiadotsh
     restart: unless-stopped
+    networks:
+      - nginx-pm_default
 
   dev:
     image: node:22-alpine
@@ -20,3 +22,7 @@ services:
 
 volumes:
   node_modules:
+
+networks:
+  nginx-pm_default:
+    external: true
