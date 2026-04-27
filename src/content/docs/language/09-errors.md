@@ -111,3 +111,20 @@ When an error occurs inside nested function calls, Praia prints the full call st
 ```
 
 Caught errors (via `try/catch`) do not print a trace -- only uncaught errors that terminate execution.
+
+## Interrupts (Ctrl+C)
+
+Pressing Ctrl+C during execution throws `"Interrupted"`, which is catchable with `try/catch`:
+
+```praia
+try {
+    for (i in 0..999999999) {
+        doWork(i)
+    }
+} catch (err) {
+    print("stopped: " + str(err))   // "stopped: Interrupted"
+    cleanup()
+}
+```
+
+Without a `try/catch`, Ctrl+C prints `Uncaught error: Interrupted` and exits. This is similar to Python's `KeyboardInterrupt`.
