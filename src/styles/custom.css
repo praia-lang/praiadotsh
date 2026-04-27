@@ -1,0 +1,14 @@
+:root {
+  --sl-color-accent-low: #414242;
+  --sl-color-accent: #e0d8bb;
+  --sl-color-accent-high: #ebe4ac;
+  --sl-font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.hero {
+  padding-block: 2rem !important;
+}
+
+.sl-markdown-content pre {
+  font-size: 0.9rem;
+}

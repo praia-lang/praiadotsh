@@ -1,0 +1,77 @@
+---
+title: The Praia Programming Language
+description: A dynamically typed language for web APIs, CLI tools, and scripting.
+hero:
+  tagline: A dynamically typed scripting language for building REST APIs, CLI tools, and automation scripts with everything you need built in.
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      variant: primary
+    - text: GitHub
+      link: https://github.com/praia-lang/praia
+      variant: minimal
+      icon: external
+---
+
+Praia comes with an HTTP server, JSON/YAML parsing, SQLite, crypto, async/await, generators, and a pipe operator for readable data pipelines - all out of the box, no packages to install.
+
+```praia
+use "router"
+
+let app = router.create()
+
+app.get("/users/:id", lam{ req, params in
+    let user = db.findUser(params.id)
+    return http.json(user)
+})
+
+app.get("/search", lam{ req, params in
+    let results = sys.read("data.json")
+        |> json.parse
+        |> filter(lam{ item in item.name.test(req.query) })
+        |> sort
+    return http.json(results)
+})
+
+app.listen(8080)
+```
+
+```praia
+func fibonacci() {
+    let a = 0
+    let b = 1
+    while (true) {
+        yield a
+        let temp = a
+        a = b
+        b = temp + b
+    }
+}
+
+for (n in fibonacci()) {
+    if (n > 1000) { break }
+    print(n)
+}
+```
+
+---
+
+## Why use Praia?
+
+**Broad stdlib.** HTTP client & server, JSON, YAML, SQLite, crypto, TCP/UDP, regex, and async are all built into the language. No package installs needed to start building.
+
+**Pipe operator.** The `|>` operator turns nested calls like `sort(filter(map(data, f), g))` into linear, readable chains. Data flows top-to-bottom.
+
+**Safe regex.** When built with Google's RE2 engine, every regex completes in O(n) guaranteed time. No catastrophic backtracking. Safe for user-supplied patterns in web servers.
+
+**Lightweight generators.** Generators use stack snapshots - no threads, no OS resources. Create thousands of them. They integrate directly with `for-in` loops for lazy evaluation.
+
+**Precise numbers.** 64-bit integers stay exact. `10 / 2` returns `5` (int), not `5.0`. Overflow promotes to float instead of wrapping silently.
+
+**Sane defaults.** Only `nil` and `false` are falsy. `UPPER_CASE` names warn on reassignment. `for-in` snapshots the collection so mutation mid-loop is safe.
+
+**Pattern matching.** `match` supports equality, type patterns with `is`, and guard clauses with `when`.
+
+**Native C++ plugins.** Load shared libraries at runtime with `loadNative()`. Write performance-critical code in C++, expose it to Praia as regular functions. Scaffold a plugin project with `sand init --plugin`.
+
+**Package manager.** [sand](https://github.com/praia-lang/sand) installs and manages grains (modules) from Git repositories.
