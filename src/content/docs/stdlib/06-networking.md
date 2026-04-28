@@ -22,6 +22,40 @@ Connect with a timeout (in milliseconds):
 let sock = net.connect("192.168.1.1", 80, 500)  // 500ms timeout
 ```
 
+## TLS
+
+`net.tls(sock, hostname?)` wraps a TCP socket with TLS. The returned handle works with `net.send()`, `net.recv()`, `net.setTimeout()`, and `net.close()`.
+
+```praia
+// HTTPS banner grab
+let sock = net.connect("example.com", 443, 3000)
+let tls = net.tls(sock, "example.com")
+net.setTimeout(tls, 2000)
+net.send(tls, "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
+print(net.recv(tls))
+net.close(tls)
+```
+
+With `hostname`, SNI is sent and the certificate is verified. Without it, TLS is established without cert verification (useful for pentesting).
+
+## Concurrent Connect Scanning
+
+`net.connectAll(targets, timeout)` scans many host/port pairs concurrently using poll-based multiplexing (no threads). Targets can be `{host, port}` maps or `[host, port]` arrays.
+
+```praia
+let targets = []
+for (port in [22, 80, 443, 3306, 8080]) {
+    push(targets, {host: "192.168.1.1", port: port})
+}
+
+let results = net.connectAll(targets, 500)
+for (r in results) {
+    if (r.open) { print("port " + str(r.port) + " open") }
+}
+```
+
+Automatically batches connections to respect file descriptor limits.
+
 ## TCP Server
 
 ```praia
@@ -96,6 +130,27 @@ let sock = net.udp()
 net.bindInterface(sock, "en0")
 ```
 
+## ICMP Ping
+
+`net.ping(host, timeout?)` sends an ICMP echo request. Works unprivileged on macOS, needs root on Linux.
+
+```praia
+let r = net.ping("8.8.8.8")
+if (r.alive) { print("up, rtt=" + str(r.rtt) + "ms") }
+```
+
+`net.pingAll(hosts, timeout?)` pings multiple hosts concurrently using a single socket. All requests are sent at once, then replies are collected via poll.
+
+```praia
+let hosts = []
+for (i in 1..255) { push(hosts, "192.168.1." + str(i)) }
+
+let results = net.pingAll(hosts, 500)
+for (r in results) {
+    if (r.alive) { print(r.host + " up (" + str(r.rtt) + "ms)") }
+}
+```
+
 ## Socket Timeouts
 
 ```praia
@@ -110,11 +165,18 @@ net.setTimeout(sock, 5000)     // 5 second timeout
 | Function | Description |
 |----------|-------------|
 | `net.connect(host, port, timeout?)` | Connect to a TCP server, returns socket. Optional timeout in ms |
+| `net.connectAll(targets, timeout)` | Concurrent TCP connect scan. Returns `[{host, port, open}]` |
 | `net.listen(port)` | Bind and listen on a port, returns server socket |
 | `net.accept(server)` | Accept a connection, returns client socket |
-| `net.send(sock, data)` | Send a string, returns bytes sent |
-| `net.recv(sock, maxBytes?)` | Receive data (default 4096 bytes), returns string |
-| `net.recvAll(sock)` | Read until connection closes, returns string |
+| `net.send(sock, data)` | Send a string, returns bytes sent. Works with TLS handles |
+| `net.recv(sock, maxBytes?)` | Receive data (default 4096 bytes). Returns `""` on timeout. Works with TLS handles |
+| `net.recvAll(sock)` | Read until connection closes. Works with TLS handles |
+
+### TLS
+
+| Function | Description |
+|----------|-------------|
+| `net.tls(sock, hostname?)` | Wrap a TCP socket with TLS, returns TLS handle. Hostname enables SNI + cert verification |
 
 ### UDP
 
@@ -125,6 +187,15 @@ net.setTimeout(sock, 5000)     // 5 second timeout
 | `net.udpBind(port)` | Create and bind a UDP socket to a port |
 | `net.sendTo(sock, host, port, data)` | Send a UDP datagram |
 | `net.recvFrom(sock, maxBytes?)` | Receive a datagram, returns `{data, host, port}` |
+
+### ICMP
+
+| Function | Description |
+|----------|-------------|
+| `net.ping(host, timeout?)` | ICMP echo, returns `{alive, rtt}`. Timeout defaults to 1500ms |
+| `net.pingAll(hosts, timeout?)` | Concurrent ping sweep, returns `[{host, alive, rtt?}]` |
+
+Unprivileged on macOS. Requires root or `CAP_NET_RAW` on Linux.
 
 ### Raw sockets
 
