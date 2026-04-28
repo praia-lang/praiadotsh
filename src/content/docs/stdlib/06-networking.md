@@ -4,7 +4,7 @@ sidebar:
   order: 6
 ---
 
-The `net` namespace provides TCP and UDP socket operations, DNS resolution, and socket timeouts. All functions support both IPv4 and IPv6.
+The `net` namespace provides TCP and UDP socket operations, DNS queries, raw sockets, and network interface management. All functions support both IPv4 and IPv6.
 
 ## TCP Client
 
@@ -14,6 +14,12 @@ net.send(sock, "hello")
 let response = net.recv(sock)
 print(response)
 net.close(sock)
+```
+
+Connect with a timeout (in milliseconds):
+
+```praia
+let sock = net.connect("192.168.1.1", 80, 500)  // 500ms timeout
 ```
 
 ## TCP Server
@@ -52,6 +58,44 @@ let ips = net.resolve("example.com")
 print(ips)    // ["93.184.216.34", "2606:2800:..."]
 ```
 
+## DNS Queries
+
+`net.query(name, type)` performs raw DNS record lookups. Supports `A`, `AAAA`, `MX`, `TXT`, `NS`, `CNAME`, `SOA`, `PTR`, and `SRV` record types.
+
+```praia
+// MX records
+let mx = net.query("google.com", "MX")
+for (r in mx) { print(str(r.priority) + " " + r.exchange) }
+
+// TXT records (SPF, DKIM, etc.)
+let txt = net.query("google.com", "TXT")
+for (r in txt) { print(r.text) }
+
+// Reverse DNS — pass an IP directly
+let ptr = net.query("8.8.8.8", "PTR")
+print(ptr[0].hostname)   // "dns.google"
+
+// SOA
+let soa = net.query("example.com", "SOA")
+print(soa[0].mname, soa[0].serial)
+```
+
+Returns an empty array for non-existent domains. Each result map contains `name`, `type`, and `ttl` plus type-specific fields (`address`, `exchange`, `text`, `hostname`, `target`, `mname`/`rname`/`serial`, `priority`/`weight`/`port`).
+
+## Network Interfaces
+
+```praia
+// List all interfaces
+let ifaces = net.interfaces()
+for (iface in ifaces) {
+    print(iface.name + ": " + str(iface.addresses))
+}
+
+// Bind a socket to a specific interface
+let sock = net.udp()
+net.bindInterface(sock, "en0")
+```
+
 ## Socket Timeouts
 
 ```praia
@@ -65,7 +109,7 @@ net.setTimeout(sock, 5000)     // 5 second timeout
 
 | Function | Description |
 |----------|-------------|
-| `net.connect(host, port)` | Connect to a TCP server, returns socket |
+| `net.connect(host, port, timeout?)` | Connect to a TCP server, returns socket. Optional timeout in ms |
 | `net.listen(port)` | Bind and listen on a port, returns server socket |
 | `net.accept(server)` | Accept a connection, returns client socket |
 | `net.send(sock, data)` | Send a string, returns bytes sent |
@@ -92,11 +136,24 @@ net.setTimeout(sock, 5000)     // 5 second timeout
 
 Raw sockets require root or `CAP_NET_RAW` on Linux. On macOS, unprivileged ICMP echo is supported via a `SOCK_DGRAM` fallback.
 
-### General
+### DNS
 
 | Function | Description |
 |----------|-------------|
 | `net.resolve(host)` | DNS lookup, returns array of IP strings |
+| `net.query(name, type)` | Raw DNS query (`"A"`, `"AAAA"`, `"MX"`, `"TXT"`, `"NS"`, `"CNAME"`, `"SOA"`, `"PTR"`, `"SRV"`) |
+
+### Interface
+
+| Function | Description |
+|----------|-------------|
+| `net.interfaces()` | List network interfaces, returns array of `{name, addresses}` |
+| `net.bindInterface(sock, name)` | Bind a socket to a network interface (e.g. `"en0"`) |
+
+### General
+
+| Function | Description |
+|----------|-------------|
 | `net.setTimeout(sock, ms)` | Set send/recv timeout in milliseconds |
 | `net.close(sock)` | Close a socket |
 
