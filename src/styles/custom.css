@@ -13,16 +13,19 @@
   font-size: 0.9rem;
 }
 
-/* Landing page: content + code examples side by side.
-   Left sidebar is kept via template: doc. The grid fills the main content area
-   and the right column overflows into the space normally used by the TOC. */
+/* Landing page: let content expand beyond default 45rem cap */
+@media (min-width: 72rem) {
+  [data-has-hero] .sl-container {
+    max-width: 100%;
+  }
+}
+
+/* Two-column grid: text left, code right */
 .landing-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   align-items: start;
-  /* Overflow into the right margin / TOC area */
-  margin-right: -18rem;
 }
 
 .landing-left h2:first-child {
@@ -38,14 +41,8 @@
   margin-block: 0.5rem;
 }
 
-/* Hide the "On this page" TOC on the landing page — code examples replace it */
-[data-has-hero] .right-sidebar {
-  display: none;
-}
-
 @media (max-width: 72rem) {
   .landing-grid {
     grid-template-columns: 1fr;
-    margin-right: 0;
   }
 }
