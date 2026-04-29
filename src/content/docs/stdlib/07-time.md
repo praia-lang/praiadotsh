@@ -13,13 +13,14 @@ The `time` namespace provides timestamps, formatting, and sleep.
 | `time.now()` | Current time as Unix milliseconds |
 | `time.epoch()` | Current time as Unix seconds |
 | `time.sleep(ms)` | Pause execution for ms milliseconds |
-| `time.format(fmt?, timestamp?)` | Format time as string (default: `"%Y-%m-%d %H:%M:%S"`) |
-| `time.parse(str, fmt?)` | Parse date string to millisecond timestamp |
+| `time.format(fmt?, timestamp?, utc?)` | Format time as string. Pass `true` for UTC |
+| `time.parse(str, fmt?, utc?)` | Parse date string to ms timestamp. Pass `true` for UTC |
 | `time.year(ts)`, `month`, `day` | Extract date components from ms timestamp |
 | `time.hour(ts)`, `minute`, `second` | Extract time components |
 | `time.weekday(ts)` | Day of week (0=Sunday, 6=Saturday) |
 | `time.addDays(ts, n)` | Add/subtract days |
 | `time.addHours(ts, n)`, `addMinutes`, `addSeconds` | Add/subtract time |
+| `time.components(ts, utc?)` | All components as map. Pass `true` for UTC |
 
 ## Examples
 

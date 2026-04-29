@@ -125,18 +125,32 @@ The pipe operator `|>` passes the left side as the first argument to the right s
 
 ```praia
 // Without pipe
-print(sort(filter(nums, lam{ n in n > 5 })))
+print(sort(filter(nums, lam{ it > 5 })))
 
 // With pipe
 nums
-    |> filter(lam{ n in n > 5 })
+    |> filter(lam{ it > 5 })
     |> sort
     |> print
 ```
 
 `a |> f` becomes `f(a)`. `a |> f(x)` becomes `f(a, x)`.
 
-See [Functions](/language/06-functions/) for more pipe examples.
+### Implicit `it`
+
+Lambdas without `in` get an implicit `it` parameter:
+
+```praia
+[1, 2, 3] |> filter(lam{ it > 1 }) |> map(lam{ it * 2 })
+```
+
+### Error pipeline (`|?>`)
+
+`|?>` catches errors — if the left side throws, the error is passed to the handler:
+
+```praia
+let data = input |> json.parse |?> lam{ nil }  // nil on parse error
+```
 
 ## Bitwise operators
 

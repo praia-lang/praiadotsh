@@ -55,6 +55,8 @@ print(a)            // [1, 2, 3, 4]
 | `.slice(start, end?)` | Extract subarray (negative indices supported) |
 | `.indexOf(val)` | Find index of element (-1 if not found) |
 | `.find(fn)` | First element where fn returns truthy (nil if not found) |
+| `.lastIndexOf(val)` | Find last index (-1 if not found) |
+| `.sort(comparator?)` | Return sorted copy |
 
 ```praia
 let arr = [1, 2, 3]
@@ -89,14 +91,14 @@ These global functions work well with the [pipe operator](/language/04-operators
 ```praia
 let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-nums |> filter(lam{ n in n % 2 == 0 }) |> print
+nums |> filter(lam{ it % 2 == 0 }) |> print
 // [2, 4, 6, 8, 10]
 
 nums |> reduce(lam{ acc, n in acc + n }, 0) |> print
 // 55
 
 [{name: "Alice", dept: "eng"}, {name: "Bob", dept: "sales"}]
-    |> groupBy(lam{ p in p.dept })
+    |> groupBy(lam{ it.dept })
 // {eng: [...], sales: [...]}
 ```
 
@@ -157,6 +159,8 @@ print(a)            // {x: 1, y: 2}
 | `.get(key, default?)` | Returns value or default (nil if omitted) |
 | `.delete(key)` | Removes key, returns `true` if it existed |
 | `.merge(other)` | Returns new map with other's values taking priority |
+| `.entries()` | Returns `[[key, value], ...]` array |
+| `.clear()` | Remove all entries |
 
 ```praia
 let m = {a: 1, b: 2}

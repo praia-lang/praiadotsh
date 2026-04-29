@@ -195,8 +195,8 @@ sayHi()
 
 ```praia
 let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-let evens = filter(nums, lam{ n in n % 2 == 0 })
-let squares = map(nums, lam{ n in n * n })
+let evens = filter(nums, lam{ it % 2 == 0 })
+let squares = map(nums, lam{ it * it })
 
 print(evens)            // [2, 4, 6, 8, 10]
 print(squares)          // [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
@@ -231,8 +231,8 @@ The pipe operator `|>` passes the left side as the first argument:
 
 ```praia
 let result = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    |> filter(lam{ n in n % 2 == 0 })
-    |> map(lam{ n in n * n })
+    |> filter(lam{ it % 2 == 0 })
+    |> map(lam{ it * it })
     |> sort
 print(result)   // [4, 16, 36, 64, 100]
 ```

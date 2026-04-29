@@ -72,6 +72,29 @@ crypto.verifyPassword("wrong", result.hash, result.salt)        // false
 
 Custom iterations: `crypto.hashPassword("pass", nil, 200000)`
 
+### Digital signatures (requires OpenSSL)
+
+Sign and verify data with RSA or EC keys.
+
+| Function | Description |
+|----------|-------------|
+| `crypto.sign(data, privateKeyPEM, algorithm?)` | Sign data, returns base64 signature |
+| `crypto.verify(data, signature, publicKeyPEM, algorithm?)` | Verify signature, returns boolean |
+| `crypto.generateKeyPair(type?, bits?)` | Generate `{privateKey, publicKey}` PEM pair |
+
+```praia
+let keys = crypto.generateKeyPair("rsa", 2048)
+let sig = crypto.sign("hello", keys.privateKey)
+crypto.verify("hello", sig, keys.publicKey)  // true
+
+// EC keys (P-256)
+let ecKeys = crypto.generateKeyPair("ec")
+let ecSig = crypto.sign("data", ecKeys.privateKey)
+crypto.verify("data", ecSig, ecKeys.publicKey)  // true
+```
+
+Supported algorithms: `"sha256"` (default), `"sha384"`, `"sha512"`, `"sha1"`.
+
 ## Base64
 
 | Function | Description |

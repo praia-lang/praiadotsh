@@ -95,6 +95,13 @@ print(len(emoji))   // 3 (grapheme clusters)
 | `.repeat(count)` | Repeat string N times |
 | `.padStart(len, char?)` | Left-pad to width (default: space) |
 | `.padEnd(len, char?)` | Right-pad to width (default: space) |
+| `.center(width, char?)` | Center-pad both sides |
+| `.count(substr)` | Count non-overlapping occurrences |
+| `.isDigit()` | All characters are digits |
+| `.isAlpha()` | All characters are alphabetic |
+| `.isAlnum()` | All characters are alphanumeric |
+| `.isSpace()` | All characters are whitespace |
+| `.isUpper()` / `.isLower()` | Case checks |
 | `.trimStart()` | Remove leading whitespace |
 | `.trimEnd()` | Remove trailing whitespace |
 | `.graphemes()` | Split into array of grapheme clusters |

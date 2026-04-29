@@ -28,7 +28,7 @@ app.get("/users/:id", lam{ req, params in
 app.get("/search", lam{ req, params in
     let results = sys.read("data.json")
         |> json.parse
-        |> filter(lam{ item in item.name.test(req.query) })
+        |> filter(lam{ it.name.test(req.query) })
         |> sort
     return http.json(results)
 })
@@ -60,7 +60,9 @@ for (n in fibonacci()) {
 
 **Broad stdlib.** HTTP client & server, JSON, YAML, SQLite, crypto, TCP/UDP, regex, and async are all built into the language. No package installs needed to start building.
 
-**Pipe operator.** The `|>` operator turns nested calls like `sort(filter(map(data, f), g))` into linear, readable chains. Data flows top-to-bottom.
+**Pipe operator.** The `|>` operator turns nested calls into readable chains. Implicit `it` parameter removes boilerplate: `data |> filter(lam{ it > 5 }) |> map(lam{ it * 2 })`. The `|?>` error pipeline catches failures inline without try/catch nesting.
+
+**Tagged values.** Data-carrying variants without declarations: `Ok(42)`, `Err("fail")`, `Point(1, 2)`. Pattern match to destructure: `match (result) { Ok(val) { ... } Err(msg) { ... } }`. A rare feature in dynamic languages.
 
 **Safe regex.** When built with Google's RE2 engine, every regex completes in O(n) guaranteed time. No catastrophic backtracking. Safe for user-supplied patterns in web servers.
 
@@ -70,7 +72,7 @@ for (n in fibonacci()) {
 
 **Sane defaults.** Only `nil` and `false` are falsy. `UPPER_CASE` names warn on reassignment. `for-in` snapshots the collection so mutation mid-loop is safe.
 
-**Pattern matching.** `match` supports equality, type patterns with `is`, and guard clauses with `when`.
+**Pattern matching.** `match` supports equality, type patterns with `is`, guard clauses with `when`, and tagged value destructuring.
 
 **Native C++ plugins.** Load shared libraries at runtime with `loadNative()`. Write performance-critical code in C++, expose it to Praia as regular functions. Scaffold a plugin project with `sand init --plugin`.
 

@@ -68,6 +68,23 @@ try {
 }
 ```
 
+## defer
+
+`defer` registers cleanup code to run when the function exits — on return, throw, or normal completion. Multiple defers run in LIFO order.
+
+```praia
+func processFile(path) {
+    let db = sqlite.open("app.db")
+    defer db.close()
+
+    let sock = net.connect("host", 80)
+    defer net.close(sock)
+    // Both close automatically on exit
+}
+```
+
+Defers run even on exceptions. If a defer throws, other defers still run.
+
 ## ensure
 
 `ensure` is an early-exit guard (like Swift's `guard`). If the condition is falsy, the `else` block runs -- which should exit the scope (typically `return` or `throw`).
