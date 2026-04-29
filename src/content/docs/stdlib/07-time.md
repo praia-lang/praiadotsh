@@ -15,6 +15,11 @@ The `time` namespace provides timestamps, formatting, and sleep.
 | `time.sleep(ms)` | Pause execution for ms milliseconds |
 | `time.format(fmt?, timestamp?)` | Format time as string (default: `"%Y-%m-%d %H:%M:%S"`) |
 | `time.parse(str, fmt?)` | Parse date string to millisecond timestamp |
+| `time.year(ts)`, `month`, `day` | Extract date components from ms timestamp |
+| `time.hour(ts)`, `minute`, `second` | Extract time components |
+| `time.weekday(ts)` | Day of week (0=Sunday, 6=Saturday) |
+| `time.addDays(ts, n)` | Add/subtract days |
+| `time.addHours(ts, n)`, `addMinutes`, `addSeconds` | Add/subtract time |
 
 ## Examples
 

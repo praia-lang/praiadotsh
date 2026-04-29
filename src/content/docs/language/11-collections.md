@@ -83,6 +83,8 @@ These global functions work well with the [pipe operator](/language/04-operators
 | `zip(a, b)` | Pair elements: `[[a0, b0], [a1, b1], ...]` |
 | `enumerate(arr)` | Index-value pairs: `[[0, elem], ...]` |
 | `groupBy(arr, fn)` | Group by key function → map of arrays |
+| `findIndex(arr, fn)` | Index of first match, or -1 |
+| `flatten(arr)` | Flatten one level of nesting |
 
 ```praia
 let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
