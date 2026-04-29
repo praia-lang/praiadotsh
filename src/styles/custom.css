@@ -12,3 +12,32 @@
 .sl-markdown-content pre {
   font-size: 0.9rem;
 }
+
+/* Landing page two-column layout */
+.landing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.landing-left h2:first-child {
+  margin-top: 0;
+}
+
+.landing-right pre {
+  font-size: 0.82rem;
+  margin-block: 0.5rem;
+}
+
+.landing-right .expressive-code {
+  margin-block: 0.5rem;
+}
+
+@media (max-width: 72rem) {
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
+}

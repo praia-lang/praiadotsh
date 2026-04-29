@@ -1,6 +1,7 @@
 ---
 title: The Praia Programming Language
 description: A dynamically typed language for web APIs, CLI tools, and scripting.
+template: splash
 hero:
   tagline: A dynamically typed scripting language for building REST APIs, CLI tools, and automation scripts with everything you need built in.
   actions:
@@ -13,48 +14,8 @@ hero:
       icon: external
 ---
 
-Praia comes with an HTTP server, JSON/YAML parsing, SQLite, crypto, async/await, generators, and a pipe operator for readable data pipelines - all out of the box, no packages to install.
-
-```praia
-use "router"
-
-let app = router.create()
-
-app.get("/users/:id", lam{ req, params in
-    let user = db.findUser(params.id)
-    return http.json(user)
-})
-
-app.get("/search", lam{ req, params in
-    let results = sys.read("data.json")
-        |> json.parse
-        |> filter(lam{ it.name.test(req.query) })
-        |> sort
-    return http.json(results)
-})
-
-app.listen(8080)
-```
-
-```praia
-func fibonacci() {
-    let a = 0
-    let b = 1
-    while (true) {
-        yield a
-        let temp = a
-        a = b
-        b = temp + b
-    }
-}
-
-for (n in fibonacci()) {
-    if (n > 1000) { break }
-    print(n)
-}
-```
-
----
+<div class="landing-grid">
+<div class="landing-left">
 
 ## Why use Praia?
 
@@ -66,7 +27,7 @@ for (n in fibonacci()) {
 
 **Safe regex.** When built with Google's RE2 engine, every regex completes in O(n) guaranteed time. No catastrophic backtracking. Safe for user-supplied patterns in web servers.
 
-**Lightweight generators.** Generators use stack snapshots - no threads, no OS resources. Create thousands of them. They integrate directly with `for-in` loops for lazy evaluation.
+**Lightweight generators.** Generators use stack snapshots — no threads, no OS resources. Create thousands of them. They integrate directly with `for-in` loops for lazy evaluation.
 
 **Precise numbers.** 64-bit integers stay exact. `10 / 2` returns `5` (int), not `5.0`. Overflow promotes to float instead of wrapping silently.
 
@@ -77,3 +38,98 @@ for (n in fibonacci()) {
 **Native C++ plugins.** Load shared libraries at runtime with `loadNative()`. Write performance-critical code in C++, expose it to Praia as regular functions. Scaffold a plugin project with `sand init --plugin`.
 
 **Package manager.** [sand](https://github.com/praia-lang/sand) installs and manages grains (modules) from Git repositories.
+
+</div>
+<div class="landing-right">
+
+```praia
+// REST API with pipes
+use "router"
+
+let app = router.create()
+
+app.get("/users/:id", lam{ req, params in
+    let user = db.query(
+        "SELECT * FROM users WHERE id = ?",
+        [params.id]
+    )
+    return http.json(user[0])
+})
+
+app.get("/search", lam{ req in
+    let results = sys.read("data.json")
+        |> json.parse
+        |> filter(lam{ it.active })
+        |> sort(lam{ a, b in a.name < b.name })
+    return http.json(results)
+})
+
+app.listen(8080)
+```
+
+```praia
+// Tagged values + pattern matching
+func divide(a, b) {
+    if (b == 0) { return Err("division by zero") }
+    return Ok(a / b)
+}
+
+let results = [10, 0, 5]
+    |> map(lam{ divide(100, it) })
+
+for (r in results) {
+    match (r) {
+        Ok(val) { print("result: " + str(val)) }
+        Err(msg) { print("error: " + msg) }
+    }
+}
+```
+
+```praia
+// WebSocket chat server
+use "socket"
+
+let clients = []
+
+let server = http.createServer(lam{ req in
+    if (req.path == "/ws") {
+        return socket.upgrade(req, lam{ ws in
+            push(clients, ws)
+            ws.onMessage(lam{ msg in
+                clients
+                    |> filter(lam{ it.id != ws.id })
+                    |> each(lam{ it.send(msg) })
+            })
+            ws.onClose(lam{ in
+                clients = clients
+                    |> filter(lam{ it.id != ws.id })
+            })
+        })
+    }
+    return {body: "Chat server"}
+})
+server.listen(8080)
+```
+
+```praia
+// CLI tool — log analysis
+#!/usr/bin/env praia
+use "colors"
+
+let logs = sys.readLines("access.log")
+    |> map(lam{ it.split(" ") })
+    |> filter(lam{ len(it) >= 3 })
+    |> map(lam{ {ip: it[0], status: it[1], path: it[2]} })
+
+let byStatus = logs |> groupBy(lam{ it.status })
+
+for ({key, value} in byStatus) {
+    let color = key.startsWith("2") ? colors.green
+              : key.startsWith("4") ? colors.yellow
+              : colors.red
+    print(color(key) + ": " + str(len(value)) + " requests")
+}
+```
+
+</div>
+</div>
