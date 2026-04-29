@@ -34,9 +34,12 @@ The `math` namespace provides mathematical constants and functions.
 | `math.approx(a, b, epsilon?)` | Approximate equality (default epsilon: 1e-9) |
 | `math.sin(x)`, `cos`, `tan` | Trigonometry (radians) |
 | `math.asin(x)`, `acos`, `atan` | Inverse trig |
+| `math.atan2(y, x)` | Two-argument arctangent |
 | `math.log(x)` | Natural log |
 | `math.log2(x)`, `log10(x)` | Base-2 and base-10 log |
 | `math.exp(x)` | e^x |
+| `math.isNan(x)` | `true` if x is NaN |
+| `math.isInf(x)` | `true` if x is ±Infinity |
 
 ### Examples
 

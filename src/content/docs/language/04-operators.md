@@ -17,11 +17,12 @@ sidebar:
 
 ## Comparison
 
+Works on numbers and strings (lexicographic ordering).
+
 ```praia
-3 < 5       // true
-3 > 5       // false
-3 <= 3      // true
-3 >= 5      // false
+3 < 5               // true
+"apple" < "banana"  // true
+"abc" <= "abc"      // true
 ```
 
 ## Equality

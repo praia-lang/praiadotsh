@@ -73,8 +73,16 @@ These global functions work well with the [pipe operator](/language/04-operators
 |----------|-------------|
 | `filter(arr, fn)` | Keep elements where fn returns truthy |
 | `map(arr, fn)` | Transform each element |
+| `flatMap(arr, fn)` | Map then flatten — array results are spread into output |
+| `reduce(arr, fn, initial?)` | Fold to single value. fn receives `(acc, elem)` |
 | `each(arr, fn)` | Call fn on each element, returns the array |
-| `sort(arr)` | Return sorted copy (ascending) |
+| `sort(arr, comparator?)` | Sorted copy. Optional: `lam{ a, b in a.age - b.age }` |
+| `any(arr, fn)` | `true` if any element matches |
+| `all(arr, fn)` | `true` if all elements match |
+| `unique(arr)` | Remove duplicates, preserving order |
+| `zip(a, b)` | Pair elements: `[[a0, b0], [a1, b1], ...]` |
+| `enumerate(arr)` | Index-value pairs: `[[0, elem], ...]` |
+| `groupBy(arr, fn)` | Group by key function → map of arrays |
 
 ```praia
 let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -82,8 +90,12 @@ let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 nums |> filter(lam{ n in n % 2 == 0 }) |> print
 // [2, 4, 6, 8, 10]
 
-nums |> map(lam{ n in n * n }) |> print
-// [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+nums |> reduce(lam{ acc, n in acc + n }, 0) |> print
+// 55
+
+[{name: "Alice", dept: "eng"}, {name: "Bob", dept: "sales"}]
+    |> groupBy(lam{ p in p.dept })
+// {eng: [...], sales: [...]}
 ```
 
 ## Maps
@@ -133,6 +145,23 @@ let a = {x: 1}
 let b = a
 b.y = 2
 print(a)            // {x: 1, y: 2}
+```
+
+### Map methods
+
+| Method | Description |
+|--------|-------------|
+| `.has(key)` | Returns `true` if the key exists |
+| `.get(key, default?)` | Returns value or default (nil if omitted) |
+| `.delete(key)` | Removes key, returns `true` if it existed |
+| `.merge(other)` | Returns new map with other's values taking priority |
+
+```praia
+let m = {a: 1, b: 2}
+m.has("a")           // true
+m.get("z", 0)        // 0
+m.delete("b")        // true
+{a: 1}.merge({b: 2}) // {a: 1, b: 2}
 ```
 
 ### Map utilities
