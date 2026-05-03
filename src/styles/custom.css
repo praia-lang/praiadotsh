@@ -9,6 +9,12 @@
   padding-block: 2rem !important;
 }
 
+@media (min-width: 50rem) {
+  .hero {
+    grid-template-columns: unset;
+  }
+}
+
 .sl-markdown-content pre {
   font-size: 0.9rem;
 }
