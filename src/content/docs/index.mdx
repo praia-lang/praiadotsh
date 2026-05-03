@@ -59,6 +59,7 @@ app.get("/users/:id", lam{ req, params in
 app.get("/search", lam{ req in
     let results = sys.read("data.json")
         |> json.parse
+        |?> lam{ [] }
         |> filter(lam{ it.active })
         |> sort(lam{ a, b in a.name < b.name })
     return http.json(results)
@@ -70,7 +71,7 @@ app.listen(8080)
 ```praia
 // Tagged values + pattern matching
 func divide(a, b) {
-    if (b == 0) { return Err("division by zero") }
+    ensure (b != 0) else { return Err("division by zero") }
     return Ok(a / b)
 }
 
@@ -94,7 +95,7 @@ let clients = []
 let server = http.createServer(lam{ req in
     if (req.path == "/ws") {
         return socket.upgrade(req, lam{ ws in
-            push(clients, ws)
+            clients.push(ws)
             ws.onMessage(lam{ msg in
                 clients
                     |> filter(lam{ it.id != ws.id })
@@ -127,7 +128,7 @@ for ({key, value} in byStatus) {
     let color = key.startsWith("2") ? colors.green
               : key.startsWith("4") ? colors.yellow
               : colors.red
-    print(color(key) + ": " + str(len(value)) + " requests")
+    print("%{color(key)}: %{len(value)} requests")
 }
 ```
 
