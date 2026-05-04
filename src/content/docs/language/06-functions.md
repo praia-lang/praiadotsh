@@ -27,6 +27,15 @@ greet("Ada")              // Hello, Ada!
 greet("Ada", "Welcome")   // Welcome, Ada!
 ```
 
+Defaults activate only when the caller **omits** the argument. Passing `nil` explicitly is preserved — it does NOT trigger the default. To convert nil to a fallback at the call site, use `??`:
+
+```praia
+greet("Ada", nil)              // "nil, Ada!" — explicit nil is kept
+greet("Ada", maybeStr ?? "Hi") // explicit nil-handling at the call site
+```
+
+This applies to named arguments too: omitting a named param activates its default, but `name: nil` keeps nil.
+
 ## Rest parameters
 
 Use `...name` as the last parameter to collect remaining arguments into an array:

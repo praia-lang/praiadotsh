@@ -15,9 +15,12 @@ Requires `git` on your PATH.
 ```
 sand init                      Create a grain.yaml in the current directory
 sand init --plugin             Create a grain with a native C++ plugin
-sand install                   Install or update grains from sand-lock.yaml
+sand install                   Restore grains from sand-lock.yaml
 sand install <url>             Install a grain locally (into ext_grains/)
 sand install --global <url>    Install a grain globally (into ~/.praia/ext_grains/)
+sand update                    Re-fetch all grains pinned to "latest"
+sand update <name>             Re-fetch a single grain from its source
+sand lock                      Sync sand-lock.yaml with grain.yaml (install missing deps)
 sand remove <name>             Remove a locally installed grain
 sand remove --global <name>    Remove a globally installed grain
 sand list                      List locally installed grains
@@ -26,6 +29,18 @@ sand info <name>               Show info about an installed grain
 sand --version                 Print version
 sand help                      Show help
 ```
+
+## install vs update vs lock
+
+| Command | Source | Effect on lockfile | When to use |
+|---------|--------|--------------------|-------------|
+| `sand install` | sand-lock.yaml | Preserves dates | Restoring a project (e.g. after `git clone`) |
+| `sand update` | git remote | Updates dates | Bumping `latest`-pinned grains to current upstream |
+| `sand lock` | grain.yaml | Adds missing entries | After manually editing `grain.yaml` |
+
+`sand update` accepts an optional grain name to bump just one grain. Without a name, it re-fetches every grain whose lockfile entry has `version: latest`.
+
+`sand lock` does NOT prune entries that aren't declared in `grain.yaml` — those may be transitive dependencies you don't see directly. Use `sand remove <name>` to drop entries explicitly.
 
 ## Installing grains
 

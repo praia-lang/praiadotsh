@@ -77,11 +77,17 @@ let x = nil
 print(x?.name)                // nil
 ```
 
-`?[` does the same for index access:
+`?[` does the same for index access. It returns `nil` when the object is `nil`, the index is out of bounds, or the map key is missing. Type errors (e.g. indexing a number) still throw.
 
 ```praia
 let arr = nil
-print(arr?[0])                // nil
+print(arr?[0])                // nil (object is nil)
+
+let nums = [10, 20]
+print(nums?[5])               // nil (out of bounds)
+
+let m = {a: 1}
+print(m?["missing"])          // nil (no such key)
 ```
 
 ## Nil coalescing

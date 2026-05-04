@@ -158,8 +158,10 @@ print(a[0])                      // 4
 | `__div(other)` | `/` |
 | `__mod(other)` | `%` |
 | `__eq(other)` | `==`, `!=` (negated) |
-| `__lt(other)` | `<`, `>=` (negated) |
-| `__gt(other)` | `>`, `<=` (negated) |
+| `__lt(other)` | `<` (also `>=` if `__ge` not defined, negated) |
+| `__gt(other)` | `>` (also `<=` if `__le` not defined, negated) |
+| `__le(other)` | `<=` (preferred over negated `__gt`) |
+| `__ge(other)` | `>=` (preferred over negated `__lt`) |
 | `__neg()` | unary `-` |
 | `__str()` | `str()`, string interpolation |
 | `__len()` | `len()` |
