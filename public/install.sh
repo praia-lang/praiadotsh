@@ -78,6 +78,15 @@ main() {
     $SUDO chmod +x "${INSTALL_DIR}/bin/praia"
     $SUDO cp -R "${TMPDIR}/lib/praia/grains" "${INSTALL_DIR}/lib/praia/"
     $SUDO cp -R "${TMPDIR}/lib/praia/sand" "${INSTALL_DIR}/lib/praia/"
+    # Bundled runtime libraries (macOS dylibs / Linux .so files).
+    # The binary's load paths point here via @executable_path/.. or $ORIGIN/..
+    # so the install is self-contained without homebrew or apt dev packages.
+    if [ -d "${TMPDIR}/lib/praia/dylibs" ]; then
+        $SUDO cp -R "${TMPDIR}/lib/praia/dylibs" "${INSTALL_DIR}/lib/praia/"
+    fi
+    if [ -d "${TMPDIR}/lib/praia/lib" ]; then
+        $SUDO cp -R "${TMPDIR}/lib/praia/lib" "${INSTALL_DIR}/lib/praia/"
+    fi
 
     # Create sand symlink
     $SUDO ln -sf "${INSTALL_DIR}/lib/praia/sand/sand.sh" "${INSTALL_DIR}/bin/sand" 2>/dev/null || true
