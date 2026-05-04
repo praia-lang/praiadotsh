@@ -24,10 +24,10 @@ let sock = net.connect("192.168.1.1", 80, 500)  // 500ms timeout
 
 ## TLS
 
-`net.tls(sock, hostname?)` wraps a TCP socket with TLS. The returned handle works with `net.send()`, `net.recv()`, `net.setTimeout()`, and `net.close()`.
+`net.tls(sock, hostname, options?)` wraps a TCP socket with TLS. The returned handle works with `net.send()`, `net.recv()`, `net.setTimeout()`, and `net.close()`.
 
 ```praia
-// HTTPS banner grab
+// HTTPS request — SNI + certificate verification (default)
 let sock = net.connect("example.com", 443, 3000)
 let tls = net.tls(sock, "example.com")
 net.setTimeout(tls, 2000)
@@ -36,7 +36,21 @@ print(net.recv(tls))
 net.close(tls)
 ```
 
-With `hostname`, SNI is sent and the certificate is verified. Without it, TLS is established without cert verification (useful for pentesting).
+A `hostname` is **required** by default. It is used both for SNI and for certificate hostname verification. The handshake fails if the certificate doesn't match.
+
+### Disabling verification
+
+For self-signed certs, pass `{verify: false}` explicitly:
+
+```praia
+// SNI sent, cert NOT verified
+let tls = net.tls(sock, "example.com", {verify: false})
+
+// No SNI, no verification (raw banner grab)
+let tls = net.tls(sock, "", {verify: false})
+```
+
+`net.tls(sock)` without a hostname errors out — this is intentional, to make the insecure path explicit.
 
 ## Concurrent Connect Scanning
 
@@ -176,7 +190,7 @@ net.setTimeout(sock, 5000)     // 5 second timeout
 
 | Function | Description |
 |----------|-------------|
-| `net.tls(sock, hostname?)` | Wrap a TCP socket with TLS, returns TLS handle. Hostname enables SNI + cert verification |
+| `net.tls(sock, hostname, options?)` | Wrap a TCP socket with TLS. Hostname required; pass `{verify: false}` to opt out of cert verification |
 
 ### UDP
 
