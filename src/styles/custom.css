@@ -19,6 +19,17 @@
   font-size: 0.9rem;
 }
 
+/* Inline code spans (e.g. `data |> filter(lam{ it > 5 })`) — allow them
+ * to wrap mid-token on narrow viewports instead of overflowing horizontally.
+ * The :not(pre) > code selector deliberately leaves block code (<pre><code>)
+ * alone so it keeps its formatting and gets horizontal scroll instead.
+ * `overflow-wrap: anywhere` is the modern way; `word-break` is a fallback
+ * for older Safari. */
+.sl-markdown-content :not(pre) > code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Landing page: let content expand beyond default 45rem cap */
 @media (min-width: 72rem) {
   [data-has-hero] .sl-container {
