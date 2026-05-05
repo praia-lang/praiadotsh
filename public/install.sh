@@ -49,7 +49,21 @@ main() {
     FILENAME="praia-${PLATFORM}.tar.gz"
     URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
 
-    echo "Installing Praia ${VERSION} for ${PLATFORM}..."
+    # Skip if we're already on this version. `praia -v` prints "Praia Version 0.5.1".
+    if [ -x "${INSTALL_DIR}/bin/praia" ]; then
+        CURRENT="$("${INSTALL_DIR}/bin/praia" -v 2>/dev/null | awk '{print $NF}')"
+        if [ "$CURRENT" = "$VERSION" ]; then
+            echo "Praia ${VERSION} is already installed at ${INSTALL_DIR}/bin/praia."
+            exit 0
+        fi
+        if [ -n "$CURRENT" ]; then
+            echo "Upgrading Praia ${CURRENT} -> ${VERSION}..."
+        else
+            echo "Reinstalling Praia ${VERSION}..."
+        fi
+    else
+        echo "Installing Praia ${VERSION} for ${PLATFORM}..."
+    fi
 
     # Download to temp directory
     TMPDIR=$(mktemp -d)
@@ -74,10 +88,26 @@ main() {
 
     $SUDO mkdir -p "${INSTALL_DIR}/bin"
     $SUDO mkdir -p "${INSTALL_DIR}/lib/praia"
+
+    # Remove the directories we manage so the install is a clean replacement
+    # — files removed in the new version don't linger from the old install.
+    # Anything outside lib/praia/{grains,sand,dylibs,lib,include} is left alone.
+    $SUDO rm -rf "${INSTALL_DIR}/lib/praia/grains" \
+                 "${INSTALL_DIR}/lib/praia/sand" \
+                 "${INSTALL_DIR}/lib/praia/dylibs" \
+                 "${INSTALL_DIR}/lib/praia/lib" \
+                 "${INSTALL_DIR}/lib/praia/include"
+
     $SUDO cp "${TMPDIR}/praia" "${INSTALL_DIR}/bin/praia"
     $SUDO chmod +x "${INSTALL_DIR}/bin/praia"
     $SUDO cp -R "${TMPDIR}/lib/praia/grains" "${INSTALL_DIR}/lib/praia/"
     $SUDO cp -R "${TMPDIR}/lib/praia/sand" "${INSTALL_DIR}/lib/praia/"
+    # Plugin headers — installed alongside the binary so users can build
+    # native plugins (`praia --include-path` resolves here) without a Praia
+    # source checkout.
+    if [ -d "${TMPDIR}/lib/praia/include" ]; then
+        $SUDO cp -R "${TMPDIR}/lib/praia/include" "${INSTALL_DIR}/lib/praia/"
+    fi
     # Bundled runtime libraries (macOS dylibs / Linux .so files)
     if [ -d "${TMPDIR}/lib/praia/dylibs" ]; then
         $SUDO cp -R "${TMPDIR}/lib/praia/dylibs" "${INSTALL_DIR}/lib/praia/"
