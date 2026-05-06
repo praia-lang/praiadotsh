@@ -21,7 +21,7 @@ use "colors"
 | Grain | Description |
 |-------|-------------|
 | `router` | Express-style HTTP routing with path parameters, middleware support |
-| `middleware` | CORS, JSON body parsing, auth, request IDs for the router |
+| `middleware` | CORS, JSON body parsing, auth, request IDs, body size limits for the router |
 | `cookie` | HTTP cookie parsing and building |
 | `session` | Server-side session management (in-memory store) |
 
@@ -100,6 +100,7 @@ let server = router.create()
 
 server.use(middleware.cors())
 server.use(middleware.jsonBody())
+server.use(middleware.bodyLimit(10_000_000))   // reject bodies > 10 MB with 413
 server.use(logger.middleware(log))
 
 server.get("/", lam{ req, params in

@@ -174,6 +174,24 @@ bytes.fromHex("414243")         // "ABC"
 bytes.len(data)
 ```
 
+### Byte-indexed search and slice
+
+The string method versions of `slice`/`indexOf` are grapheme-indexed and corrupt arbitrary binary data. The `bytes.*` versions operate on raw bytes — use these when a string holds non-text content (file uploads, network frames, etc.):
+
+```praia
+bytes.slice(data, start, end?)         // byte-indexed substring
+bytes.indexOf(data, sub, startByte?)   // byte offset of first match (-1 if none)
+```
+
+```praia
+let body = req.body                    // raw HTTP body, may be binary
+let boundary = "--" + b
+let pos = bytes.indexOf(body, boundary)
+let part = bytes.slice(body, pos + bytes.len(boundary))
+```
+
+Negative indices count from the end. `bytes.slice` clamps out-of-range indices to the string boundary.
+
 ### Character codes
 
 ```praia

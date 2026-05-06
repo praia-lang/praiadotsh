@@ -67,8 +67,99 @@ try {
 - `async funcCall(args)` evaluates the function and arguments on the current thread, then spawns the call in a new OS thread
 - Returns a **future** immediately
 - `await future` blocks until the background thread finishes
-- Each async Praia function gets its own VM with a snapshot of globals -- tasks are fully isolated, no shared mutable state, no data races
+- Each async Praia function gets its own VM with a **deep copy** of globals, captured upvalues, and arguments — tasks are fully isolated, no shared mutable state, no data races
 - Native functions (`http.get`, `sys.exec`, etc.) also run in true parallel
+- A bare `async fn()` (no `let f =`) is fire-and-forget — it returns immediately and the task runs to completion in the background
+
+## Sharing state across async tasks
+
+Because globals/upvalues/arguments are deep-copied, **you cannot share a Praia map, array, or class instance between an async task and its caller** — each side has its own independent copy. This is the price of "no data races" in user code.
+
+```praia
+let m = {}
+func writer(k, v) { m[k] = v }
+let f = async writer("a", 1)
+await f
+print(m)              // {} — the task mutated its own copy of `m`
+```
+
+To communicate, use one of the following:
+
+- **`SharedMap`** — cross-task key-value store. Use this when async tasks need to read or write shared state by key (progress trackers, job state, caches). See below.
+- **`Channel`** — built for cross-task messaging (the channel itself isn't deep-copied; only the values you send through it are messages, not shared state).
+- **`CancellationToken`** — cooperative cancel signal. The caller flips the flag; long-running tasks poll and bail. See below.
+- **External resources** — files, SQLite, sockets, native plugin state. These live outside the Praia heap, so all tasks see the same underlying resource. Use `Lock()` to coordinate concurrent access (see below).
+- **`await`** — collect results back from the task. The future's return value is moved across the boundary.
+
+## SharedMap
+
+`SharedMap()` is a thread-safe key-value store that survives the `async` deep-copy. Unlike a regular `{}` map, mutations from inside an async task are visible to the caller and vice versa.
+
+```praia
+let jobs = SharedMap()
+
+jobs.set("abc", {progress: 0})
+let f = async lam{ in
+    jobs.update("abc", lam{ s in s.progress = 50; return s })
+}()
+await f
+print(jobs.get("abc"))     // {progress: 50}
+```
+
+| Method | Description |
+|--------|-------------|
+| `m.set(k, v)` | Insert or replace the value for `k`. |
+| `m.get(k)` | Returns the value, or `nil` if absent. |
+| `m.get(k, default)` | Returns the value, or `default` if absent. |
+| `m.has(k)` | `true` if `k` is present. |
+| `m.delete(k)` | Removes `k`. Returns `true` if it was present. |
+| `m.update(k, fn)` | Atomic read-modify-write. `fn` receives the current value (or `nil`); its return value is stored. Lock held during `fn`. |
+| `m.keys()` | Snapshot array of keys. |
+| `m.values()` | Snapshot array of values. |
+| `m.size()` | Number of entries. |
+| `m.clear()` | Remove all entries. |
+
+`update` is the right tool for compound mutations like increments, list appends, or conditional writes — the lock guarantees no other task observes a half-update. Don't do I/O inside `update`; the lock is held for the duration of `fn`.
+
+The lock is `recursive`, so `fn` can call `m.has`/`m.get`/`m.set` on the same SharedMap without deadlocking.
+
+## CancellationToken
+
+`CancellationToken()` is a flag that any task can flip to "cancelled". Pass it to a long-running async task and have the task poll `cancelled()` periodically to bail out cleanly. This is the cooperative alternative to killing a task by signal: the task gets to clean up its own subprocess, files, etc.
+
+```praia
+let token = CancellationToken()
+
+func work(tok) {
+    let proc = sys.spawn(["ffmpeg", "-i", "in.mp4", "out.webm"])
+    while (true) {
+        if (tok.cancelled()) {
+            proc.kill()
+            return "cancelled"
+        }
+        let line = proc.readLine()
+        if (line == nil) { break }
+        // ...
+    }
+    proc.wait()
+    return "done"
+}
+
+let f = async work(token)
+// ... later, from any thread:
+token.cancel()
+print(await f)        // "cancelled"
+```
+
+| Method | Description |
+|--------|-------------|
+| `token.cancel()` | Set the cancelled flag. Idempotent. |
+| `token.cancelled()` | Returns `true` if `cancel()` has been called. |
+| `token.throwIfCancelled()` | Throws `"cancelled"` if cancelled, otherwise returns nil. Convenient for early-bail patterns inside loops. |
+
+The flag is a `std::atomic<bool>` under the hood — `cancel()` and `cancelled()` are lock-free. Cancellation is a one-way transition; tokens cannot be un-cancelled. Make a fresh `CancellationToken()` per logical operation.
+
+For tasks that block on I/O (e.g. `proc.readLine()`), check `cancelled()` between reads. The task only notices cancellation at poll points, so cancellation latency is bounded by the longest gap between checks. If you also need fast cancellation for a blocked subprocess, the task can call `proc.kill()` itself when `cancelled()` returns true.
 
 ## Channels
 
@@ -134,28 +225,31 @@ for (i in 0..len(targets)) {
 
 ## Lock
 
-`Lock()` creates a mutex for thread-safe access to shared state.
+`Lock()` is a mutex for serializing concurrent access to **external resources** — files, sqlite handles, sockets, native plugin state. It does not, and cannot, make a Praia value shared across tasks; for that, use a Channel.
 
 ```praia
 let lock = Lock()
-let counter = 0
+let db = sqlite.open("counts.db")
 
-// Manual acquire/release
-lock.acquire()
-counter = counter + 1
-lock.release()
+func increment() {
+    lock.withLock(lam{ in
+        let row = db.query("SELECT n FROM c WHERE id = 1")
+        db.run("UPDATE c SET n = ? WHERE id = 1", [row[0].n + 1])
+    })
+}
 
-// withLock -- auto-releases when the function returns (or throws)
-lock.withLock(lam{ in
-    counter = counter + 1
-})
+let f1 = async increment()
+let f2 = async increment()
+await f1
+await f2
+// db is shared; lock prevents the two reads/writes from racing
 ```
 
 | Method | Description |
 |--------|-------------|
 | `lock.acquire()` | Acquire the lock (blocks if held) |
 | `lock.release()` | Release the lock |
-| `lock.withLock(fn)` | Acquire, call fn, release -- even if fn throws |
+| `lock.withLock(fn)` | Acquire, call fn, release -- even if fn throws. Returns fn's return value. |
 
 **Always prefer `withLock`** -- it handles errors correctly and cannot forget to release.
 
@@ -163,19 +257,21 @@ The lock is re-entrant: the same thread can acquire it multiple times without de
 
 ## HTTP server concurrency
 
-The HTTP server is **single-threaded** -- handlers run serially. If you use `async` inside a handler, use `Lock()` to protect shared data:
+The HTTP server is **single-threaded** -- handlers run serially. `async` inside a handler is still useful for fire-and-forget background work or for parallelising I/O with `await`; just remember the cross-task isolation rules above.
+
+If a handler needs to communicate progress back to a *later* request (e.g. polling `/progress/:id` while a conversion runs in the background), don't try to share a Praia map. Two practical options:
 
 ```praia
-let lock = Lock()
-let db = sqlite.open("app.db")
+// 1. Channel-driven: a long-running pump goroutine drains updates
+let updates = Channel(100)
+let _job = async runConversion(jobId, updates)
+// the handler for /progress/:id reads from a per-job state file or sqlite
+// row that the background task wrote — channels are FIFO so they don't
+// fit "look up by id"
 
-server.post("/increment", lam{ req, params in
-    let result = lock.withLock(lam{ in
-        let row = db.query("SELECT count FROM counters WHERE id = 1")
-        let newCount = row[0].count + 1
-        db.run("UPDATE counters SET count = ? WHERE id = 1", [newCount])
-        return newCount
-    })
-    return http.json({count: result})
-})
+// 2. Disk- or db-backed job state
+let _job = async runConversion(jobId)   // task writes to _jobs/<jobId>.json
+// /progress/:id reads _jobs/<jobId>.json
 ```
+
+For app-level body limits use `middleware.bodyLimit(n)`; for DoS protection put a reverse proxy (nginx, caddy) in front.

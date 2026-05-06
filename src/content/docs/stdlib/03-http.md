@@ -132,6 +132,23 @@ server.get("/events", lam{ req, params in
 })
 ```
 
+### Request body size
+
+The server has no built-in cap on request body size — it reads up to `Content-Length` bytes into `req.body`. This matches the philosophy of `net/http`, Flask, and Express: the stdlib stays out of policy. If you need a limit, opt in:
+
+- **Application-level** — use `middleware.bodyLimit(n)` from the [middleware grain](/grains/standard/) to reject requests with `Content-Length` over `n` bytes (returns 413).
+- **DoS-grade** — put a reverse proxy (nginx, caddy) in front. A determined attacker can lie about `Content-Length` or stream forever; only the proxy can short-circuit before the body is buffered.
+
+```praia
+use "router"
+use "middleware"
+
+let app = router.create()
+app.use(middleware.bodyLimit(10_000_000))   // 10 MB cap
+```
+
+Headers are capped at 64 KB regardless.
+
 ### Error handling
 
 If the handler throws an error, the server returns a 500 response and continues running.
