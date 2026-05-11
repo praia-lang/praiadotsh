@@ -104,7 +104,7 @@ You can also return a plain string, which becomes a 200 text/plain response.
 | `http.text(str, status?)` | Plain text response |
 | `http.html(str, status?)` | HTML response with `charset=utf-8` |
 | `http.redirect(url, status?)` | Redirect (302 by default) |
-| `http.file(path, status?)` | Serve a file with auto-detected MIME type |
+| `http.file(path, status?, opts?)` | Serve a file with auto-detected MIME type |
 
 ```praia
 return http.json(data)
@@ -115,6 +115,32 @@ return http.redirect("/login")
 return http.redirect("/new-url", 301)
 return http.file("public/style.css")
 ```
+
+#### Serving files from user input — path traversal
+
+`http.file` and `http.fileStream` will serve whatever path you give them — including `/etc/passwd`. By design: if you're serving a hard-coded asset, you don't pay any path-resolution overhead, and the API stays out of your way. **But if any part of the path comes from a request** (URL params, query strings, form fields, headers), you must constrain where it can resolve to, or an attacker passing `../../etc/passwd` will read whatever the server process can read.
+
+Use the `withinDir` option — it resolves both the path and the dir to their canonical absolute forms (handling `..`, relative components, and symlinks) and refuses to serve anything outside:
+
+```praia
+server.get("/files/:name", lam{ req, params in
+    // Without withinDir, a name of "../../etc/passwd" would be served.
+    // With it, the request gets rejected before any read.
+    return http.file("uploads/" + params.name, {withinDir: "uploads"})
+})
+```
+
+On escape, the call throws — handle it like any other error (return 404, log, etc.):
+
+```praia
+try {
+    return http.file("uploads/" + params.name, {withinDir: "uploads"})
+} catch (e) {
+    return http.text("not found", 404)
+}
+```
+
+Symlinks pointing outside the jail are blocked too (a symlink in `uploads/` that targets `/etc/passwd` is rejected).
 
 ### Server-Sent Events (SSE)
 
