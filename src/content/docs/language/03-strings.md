@@ -104,10 +104,14 @@ print(len(emoji))   // 3 (grapheme clusters)
 | `.isUpper()` / `.isLower()` | Case checks |
 | `.trimStart()` | Remove leading whitespace |
 | `.trimEnd()` | Remove trailing whitespace |
+| `.reverse()` | Reverse the string by grapheme clusters (accents stay on their base, ZWJ emoji stay intact) |
 | `.graphemes()` | Split into array of grapheme clusters |
 | `.codepoints()` | Array of Unicode codepoint values (integers) |
 | `.bytes()` | Array of raw byte values (integers) |
 | `.charCode(index?)` | Unicode codepoint of grapheme at index (default: 0) |
+| `.encode(encoding)` | Encode into bytes using `"utf-8"`, `"utf-16le"`, `"utf-16be"`, `"latin-1"`, or `"ascii"`. Inverse: `bytes.decode(b, encoding)` |
+
+For normalization, monospace display width, case-insensitive collation, and the encoding conversions, see the [`unicode` namespace](/stdlib/unicode/).
 
 ### Examples
 

@@ -57,7 +57,7 @@ app.get("/users/:id", lam{ req, params in
 })
 
 app.get("/search", lam{ req in
-    let results = sys.read("data.json")
+    let results = fs.read("data.json")
         |> json.parse
         |?> lam{ [] }
         |> filter(lam{ it.active })
@@ -117,7 +117,7 @@ server.listen(8080)
 #!/usr/bin/env praia
 use "colors"
 
-let logs = sys.readLines("access.log")
+let logs = fs.readLines("access.log")
     |> map(lam{ it.split(" ") })
     |> filter(lam{ len(it) >= 3 })
     |> map(lam{ {ip: it[0], status: it[1], path: it[2]} })

@@ -55,6 +55,118 @@ All client methods return:
 
 Header names are lowercased for consistent access.
 
+### Request options
+
+`http.request({...})` accepts these option fields beyond `method`/`url`/`body`/`headers`. All are optional with safe defaults.
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `timeout` | -- | Shorthand: same value applied to connect, read, AND total. Seconds (float ok) |
+| `connectTimeout` | 30 | TCP/TLS handshake budget, in seconds |
+| `readTimeout` | 30 | Per `recv()` / `SSL_read()` budget, in seconds |
+| `totalTimeout` | none | Overall request budget including redirects, in seconds |
+| `followRedirects` | `true` | Follow 3xx responses with Location headers |
+| `maxRedirects` | 10 | Throw if a chain exceeds this |
+| `insecure` | `false` | **Skip TLS certificate verification.** Testing/dev only; equivalent to `curl -k` |
+| `caBundle` | system trust store | Path to a custom CA PEM bundle |
+
+```praia
+// Strict timeouts on a flaky upstream
+let r = http.request({
+    url: "https://api.flaky.example.com/data",
+    connectTimeout: 3,
+    readTimeout: 5,
+    totalTimeout: 10,
+})
+
+// Inspect a 3xx ourselves
+let r = http.request({url: probableRedirect, followRedirects: false})
+if (r.status == 301) { ... }
+
+// Self-signed dev cert (skip verify)
+let r = http.request({url: "https://localhost:8443/", insecure: true})
+
+// Internal CA / private PKI
+let r = http.request({url: "https://internal.corp/", caBundle: "/etc/ssl/corp-root.pem"})
+```
+
+### Redirects
+
+The client follows 3xx with Location by default, up to `maxRedirects` hops.
+
+- **303 See Other**: always switches to GET, drops the request body.
+- **301 / 302**: switches POST (or any non-GET/HEAD method) to GET and drops the body. Matches every browser/HTTP-library convention since the 1990s.
+- **307 / 308**: preserves both method AND body. These codes exist to disambiguate from the 301/302 method-switch behavior.
+
+**Security**: an `https://` → `http://` Location is refused outright. Relative-path Locations like `?foo=bar` aren't supported; absolute paths (`/foo`) and protocol-relative (`//host/foo`) URLs are.
+
+When `followRedirects` is `false`, the 3xx response is returned as-is with `Location` in `headers.location`.
+
+### Timeouts
+
+- **`connectTimeout`** uses non-blocking connect + poll, so a slow handshake doesn't stall the calling task.
+- **`readTimeout`** is enforced via `SO_RCVTIMEO`/`SO_SNDTIMEO`; each individual recv/send can wait at most this long.
+- **`totalTimeout`** bounds the entire request including all redirect hops. Per-request timeouts are capped at the remaining budget when this kicks in.
+
+Connect failures throw "connect timed out after Nms"; read failures throw "HTTP read timed out".
+
+### Streaming responses — `http.openStream`
+
+`http.request` slurps the body into memory. `http.openStream` returns a stream handle so you can consume the response incrementally — for downloads bigger than RAM, NDJSON feeds, log tails, etc.
+
+```praia
+let s = http.openStream({url: "https://example.com/big.json"})
+print(s.status, s.headers["content-length"])
+
+while (!s.eof()) {
+    let chunk = s.read(8192)
+    process(chunk)
+}
+s.close()
+```
+
+Same options surface as `http.request` (timeouts, redirects, TLS). Redirects are followed before the handle is returned -- by the time you see `s.status`, you're looking at the final response.
+
+#### Handle methods
+
+| Method | Description |
+|--------|-------------|
+| `s.status` | HTTP status code (int) |
+| `s.headers` | Response headers map (lowercase keys) |
+| `s.cookies` | Array of raw `Set-Cookie` header values |
+| `s.read(n)` | Read up to `n` bytes; `""` at EOF |
+| `s.readLine()` | Read one line (no trailing `\n`); `nil` at EOF. CRLF and LF both work |
+| `s.readAll()` | Drain everything remaining as a string |
+| `s.eof()` | `true` once the body is exhausted |
+| `s.close()` | Close the connection. Idempotent. Subsequent reads throw |
+
+#### Framing
+
+The stream decodes three body framings transparently:
+
+- **`Content-Length: N`** -- exactly N bytes, then EOF.
+- **`Transfer-Encoding: chunked`** -- parses `HEXSIZE\r\n<data>\r\n` until the `0\r\n` terminator. Chunk extensions (`;k=v` after the size) are ignored.
+- **Neither header** -- read until the server closes (HTTP/1.0; HTTP/1.1 with `Connection: close`).
+
+#### Composing with json.parser
+
+The handle has the same `.read(n)` shape `json.parser` expects, so streaming NDJSON over HTTP is one line of glue:
+
+```praia
+let s = http.openStream({url: feedUrl})
+let p = json.parser(s)
+while (!p.eof()) {
+    let record = p.nextValue()
+    handleRecord(record)
+}
+s.close()
+```
+
+#### Limits
+
+- **Streamed request bodies** aren't supported -- `body` is sent up front. For huge uploads, use multipart-with-temp-file or a different protocol.
+- The handle keeps the underlying TCP socket open until `.close()`. Don't leak handles.
+
 ## HTTP Server
 
 ### Creating a server
@@ -203,14 +315,83 @@ http.decodeURI("hello%20world")    // "hello world"
 
 ## URL parsing
 
+`url.parse` decomposes a URL into RFC 3986 components: `scheme`,
+`userinfo`, `host`, `port`, `path`, `query`, `fragment`. Scheme is
+lowercased; `port` is `nil` when absent (so an explicit `0` is
+distinguishable); IPv6 literals must be bracketed in the URL but the
+`host` field is returned unbracketed.
+
 ```praia
-let u = url.parse("https://example.com:8080/api?key=val")
+let u = url.parse("https://user:pass@example.com:8080/api?key=val#section")
 print(u.scheme)    // "https"
+print(u.userinfo)  // "user:pass"
 print(u.host)      // "example.com"
 print(u.port)      // 8080
 print(u.path)      // "/api"
 print(u.query)     // "key=val"
+print(u.fragment)  // "section"
+
+let v = url.parse("http://[::1]:8080/")
+print(v.host)      // "::1"   (brackets stripped)
+print(v.port)      // 8080
 ```
+
+Malformed input throws: non-numeric or out-of-range ports, an
+unterminated `[..]` literal, a bare IPv6 address without brackets
+(ambiguous), or any CR/LF/NUL byte (header-injection guard).
+
+## URL building
+
+The inverse of `url.parse`: compose a URL string from a component map. Every field is optional.
+
+```praia
+url.build({scheme: "https", host: "api.example.com", path: "/v1/items"})
+// "https://api.example.com/v1/items"
+
+url.build({
+    scheme: "https",
+    host:   "api.example.com",
+    port:   8443,
+    path:   "/v1/items",
+    query:  {limit: 50, tag: "blue"},
+    fragment: "section-1"
+})
+// "https://api.example.com:8443/v1/items?limit=50&tag=blue#section-1"
+```
+
+- IPv6 hosts are auto-bracketed.
+- Default ports (`80` for `http`, `443` for `https`) are dropped.
+- `query` can be a string (verbatim) or a map (run through `buildQuery`).
+- Without `scheme`/`host`, you get a relative URL (`/items?limit=10`).
+- Opaque URIs like `mailto:ada@example.com` work with `{scheme: "mailto", path: "ada@example.com"}`.
+
+## Query strings
+
+| Function | Behavior |
+|----------|----------|
+| `url.buildQuery(map)` | Serialize to `k=v&k=v` with RFC 3986 percent-encoding |
+| `url.parseQuery(str)` | Parse; repeated keys auto-collapse to an array |
+| `url.parseQueryAll(str)` | Parse; values are always arrays (predictable shape) |
+| `url.encode(str)` / `url.decode(str)` | Component-level percent-encoding; `decode` also handles `+` as space |
+
+```praia
+url.buildQuery({a: 1, b: "hello world", c: true})
+// "a=1&b=hello%20world&c=true"
+
+url.buildQuery({tags: ["red", "blue"]})
+// "tags=red&tags=blue"
+
+url.buildQuery({a: "kept", b: nil})
+// "a=kept"                        // nil values skipped
+
+url.parseQuery("tags=red&tags=blue")
+// {tags: ["red", "blue"]}         // auto-array on repeated key
+
+url.parseQueryAll("a=1&b=2&a=3")
+// {a: ["1", "3"], b: ["2"]}       // always arrays
+```
+
+`buildQuery` rejects nested maps or arrays inside values -- there's no canonical wire form. Use JSON-encoded strings if you need structured data in a query parameter.
 
 ## Router grain
 

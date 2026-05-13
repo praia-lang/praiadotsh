@@ -22,14 +22,15 @@ use "colors"
 |-------|-------------|
 | `router` | Express-style HTTP routing with path parameters, middleware support |
 | `middleware` | CORS, JSON body parsing, auth, request IDs, body size limits for the router |
-| `cookie` | HTTP cookie parsing and building |
+| `cookie` | Parse/build single headers, `parseSet` for response attributes, `sign`/`verify` (HMAC), `encrypt`/`decrypt` (AEAD), and a `Jar` class that tracks cookies across requests |
+| `multipart` | Parser for `multipart/form-data` request bodies. `parse(req, {maxSize: N})` and a router `middleware()` form |
 | `session` | Server-side session management (in-memory store) |
 
 ### Testing
 
 | Grain | Description |
 |-------|-------------|
-| `testing` | Test framework with `test()`, `assertEqual()`, `done()` |
+| `testing` | Assertions, fixtures (`tempDir`, `cleanup`), `beforeEach`/`afterEach`, `subtest`/`testEach`, `skip`/`only`, `matchSnapshot` |
 
 ### Data formats
 
@@ -49,14 +50,17 @@ use "colors"
 | `colors` | ANSI color and style helpers (red, green, bold, RGB, etc.) |
 | `progress` | Progress bars and spinners |
 | `table` | Formatted text tables |
-| `logger` | Structured logging with levels (debug, info, warn, error) |
+| `logger` | Leveled, structured logging. Sinks (`stdoutSink`, `stderrSink`, `fileSink`, `multiSink`), formatters (`textFormatter`, `jsonFormatter`), `.with()` for sticky context |
 
 ### Utilities
 
 | Grain | Description |
 |-------|-------------|
 | `strings` | Extended string utilities |
-| `collections` | Data structure utilities |
+| `collections` | `Stack`, `Queue`, `Deque`, `Set`, `OrderedMap`, `Counter`, `DefaultDict` — each header has Big-O notes |
+| `heap` | Binary min-heap (priority queue) on plain arrays: `push`, `pop`, `peek`, `heapify`, `pushPop`, `replace`. Optional `keyFn` for priority-queue use |
+| `bisect` | Binary search on sorted arrays: `left`, `right`, `insort`, `contains`. Mirrors Python's `bisect` module |
+| `statistics` | Numeric descriptive stats: `mean`, `median` (+ `medianLow`/`High`), `mode`, `multimode`, `variance`/`pvariance`, `stdev`/`pstdev`, `range`, `quantiles`, `covariance`, `correlation` |
 | `math` | Extended math functions |
 | `geometry` | Geometry helpers |
 | `datetime` | Date and time utilities |
@@ -83,8 +87,34 @@ testing.test("addition", lam{ in
     testing.assertEqual(1 + 1, 2, nil)
 })
 
+// Fixtures: temp dirs auto-clean at end-of-test.
+testing.test("uses a temp dir", lam{ in
+    let dir = testing.tempDir()
+    fs.write(dir + "/x.txt", "hi")
+    testing.assertEqual(fs.read(dir + "/x.txt"), "hi", nil)
+})
+
+// Subtests + table-driven cases.
+testing.testEach("addition cases", [
+    {name: "0+0", a: 0, b: 0, want: 0},
+    {name: "neg", a: -1, b: 1, want: 0}
+], lam{ t, c in
+    t.assertEqual(c.a + c.b, c.want, nil)
+})
+
+// Snapshots: first run writes, later runs compare.
+// Re-run with PRAIA_UPDATE_SNAPSHOTS=1 to accept new output.
+testing.test("render", lam{ in
+    testing.matchSnapshot("default", "expected\noutput\n")
+})
+
 testing.done()
 ```
+
+`testing.beforeEach(fn)` / `afterEach(fn)` register file-scoped hooks.
+`testing.cleanup(fn)` registers a per-test cleanup (reverse-order, runs
+even on throw). `testing.skip(name, fn?)` and `testing.only(name, fn)`
+control which tests run.
 
 Run with `praia test` to discover and execute test files.
 

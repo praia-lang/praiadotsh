@@ -17,16 +17,14 @@ sand init
 
 This creates a `grain.yaml` manifest and a `main.praia` entry file. For grains that include a native C++ plugin, use `sand init --plugin` instead (see [Native Plugins](/advanced/02-plugins/)).
 
-You can also create a grain manually. A grain is any `.praia` file that ends with an `export` statement:
+You can also create a grain manually. A grain is any `.praia` file that ends with an `export` statement. Pick a name that doesn't collide with a builtin namespace (`math`, `http`, `json`, etc.) -- `use` binds the grain into the current scope under its filename, which would shadow the builtin entirely.
 
 ```praia
-// grains/math.praia
-let PI = 3.14159
+// grains/geometry.praia
+func circleArea(r) { return math.PI * math.square(r) }
+func cubeVolume(s) { return math.cube(s) }
 
-func square(x) { return x * x }
-func cube(x) { return x * x * x }
-
-export { PI, square, cube }
+export { circleArea, cubeVolume }
 ```
 
 ## Importing a grain
@@ -34,10 +32,10 @@ export { PI, square, cube }
 Use `use` to import. The grain is bound to a variable named after the last path segment:
 
 ```praia
-use "math"
+use "geometry"
 
-print(math.PI)          // 3.14159
-print(math.square(5))   // 25
+print(geometry.circleArea(3))   // ≈ 28.274
+print(geometry.cubeVolume(4))   // 64
 ```
 
 ### Custom alias
@@ -99,7 +97,7 @@ export { process }
 
 ## Resolution order
 
-When you write `use "math"`, Praia looks for the grain in this order:
+When you write `use "geometry"`, Praia looks for the grain in this order:
 
 1. **`ext_grains/`** -- local dependencies (installed by [sand](/grains/sand/)), walks up from the current file
 2. **`grains/`** -- project-bundled grains, walks up from the current file
@@ -119,23 +117,23 @@ At each location, Praia checks for:
 - **Explicit exports** -- only names listed in `export { ... }` are visible to the importer
 
 ```praia
-use "math"
-use "math"      // Error: Grain 'math' is already imported in this file
+use "geometry"
+use "geometry"  // Error: Grain 'geometry' is already imported in this file
 ```
 
 ## Grains importing other grains
 
-Grains can import other grains:
+Grains can import other grains. The builtin `math` namespace is already in scope inside a grain -- no `use` needed for it.
 
 ```praia
-// grains/geometry.praia
-use "math"
+// grains/shapes.praia
+use "geometry"
 
-func circleArea(r) {
-    return math.PI * math.square(r)
+func boxedCircleRatio(side) {
+    return geometry.circleArea(side / 2) / math.square(side)
 }
 
-export { circleArea }
+export { boxedCircleRatio }
 ```
 
 ## Project structure
@@ -149,7 +147,6 @@ my-project/
 │       ├── grain.yaml
 │       ���── main.praia
 ├── grains/                  <- project-bundled grains
-│   ├── math.praia
 ��   └── geometry.praia
 ├── grain.yaml               <- project manifest
 ├── sand-lock.yaml           <- lock file (auto-generated)

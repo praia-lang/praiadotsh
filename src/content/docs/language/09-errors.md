@@ -10,7 +10,7 @@ Wrap code that might fail in a `try` block. If an error occurs, execution jumps 
 
 ```praia
 try {
-    let data = sys.read("config.txt")
+    let data = fs.read("config.txt")
     print(data)
 } catch (err) {
     print("failed to read config:", err)
@@ -22,7 +22,7 @@ try {
 A `finally` block runs cleanup code regardless of success or failure:
 
 ```praia
-let file = sys.read("data.txt")
+let file = fs.read("data.txt")
 try {
     process(file)
 } catch (err) {
