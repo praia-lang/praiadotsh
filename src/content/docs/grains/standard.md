@@ -112,9 +112,14 @@ testing.done()
 ```
 
 `testing.beforeEach(fn)` / `afterEach(fn)` register file-scoped hooks.
-`testing.cleanup(fn)` registers a per-test cleanup (reverse-order, runs
-even on throw). `testing.skip(name, fn?)` and `testing.only(name, fn)`
-control which tests run.
+A throwing `beforeEach` skips the test body but still runs `afterEach`
+and cleanups. `testing.cleanup(fn)` registers a per-test cleanup
+(reverse-order, runs after `afterEach`, runs even when the body
+throws). `testing.skip(name, fn?)` and `testing.only(name, fn)` control
+which tests run.
+
+`testing.assertContains` works on strings (substring), arrays (element),
+and maps (**key presence** — `{a: nil}` still contains `"a"`).
 
 Run with `praia test` to discover and execute test files.
 
