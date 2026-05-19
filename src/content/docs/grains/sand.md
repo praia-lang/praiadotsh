@@ -155,7 +155,7 @@ The replacement uses an atomic swap (stage to a sibling `.new.<pid>` directory, 
 
 ## Project manifest
 
-Run `sand init` to create a `grain.yaml` and `main.praia`:
+Run `sand init` to create a `grain.yaml` and `main.praia`. The generated manifest looks like this (with two example dependencies filled in):
 
 ```yaml
 name: my-project
@@ -164,10 +164,19 @@ description: A short description
 author: username
 license: MIT
 main: main.praia
+# bin: declares CLI entry points planted on PATH when this
+# grain is installed globally (`sand install -g`). Each key is
+# the command name, each value a relative .praia file. Leave
+# empty for libraries. Example:
+#   bin:
+#     my-project: main.praia
+bin:
 dependencies:
   db: github.com/user/praia-db
   dotenv: github.com/user/praia-dotenv
 ```
+
+The `bin:` section is live but empty by default — leave it as-is for libraries. To ship a CLI, replace the empty `bin:` line with key/value pairs as shown in the comment (also see [CLI grains](#cli-grains-the-bin-section) above). `sand init --plugin` produces the same `bin:` scaffolding alongside the C++ plugin files.
 
 When you `sand install <url>`, the dependency is automatically added to `grain.yaml` if one exists. Transitive dependencies listed in a grain's own `grain.yaml` are installed automatically.
 
