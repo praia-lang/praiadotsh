@@ -64,7 +64,7 @@ make
 sudo make install
 ```
 
-This installs `praia` and `sand` (the package manager) to `/usr/local/bin/`, with stdlib grains in `/usr/local/lib/praia/`.
+This installs `praia` and `sand` (the package manager) to `/usr/local/bin/`, with stdlib grains in `/usr/local/lib/praia/grains/`. Sand itself lives at `/usr/local/lib/praia/ext_grains/sand/` so it can [self-update](/grains/sand/#updating-sand-itself) like any other global grain.
 
 To customize the install location:
 

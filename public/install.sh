@@ -91,9 +91,14 @@ main() {
 
     # Remove the directories we manage so the install is a clean replacement
     # — files removed in the new version don't linger from the old install.
-    # Anything outside lib/praia/{grains,sand,dylibs,lib,include} is left alone.
+    # Anything outside lib/praia/{grains,ext_grains/sand,dylibs,lib,include}
+    # is left alone (third-party grains in lib/praia/ext_grains/* survive).
+    #
+    # lib/praia/sand is the PRE-0.6 sand location; it lingers from older
+    # installs but the binary no longer looks there. One-release migration.
     $SUDO rm -rf "${INSTALL_DIR}/lib/praia/grains" \
                  "${INSTALL_DIR}/lib/praia/sand" \
+                 "${INSTALL_DIR}/lib/praia/ext_grains/sand" \
                  "${INSTALL_DIR}/lib/praia/dylibs" \
                  "${INSTALL_DIR}/lib/praia/lib" \
                  "${INSTALL_DIR}/lib/praia/include"
@@ -101,7 +106,13 @@ main() {
     $SUDO cp "${TMPDIR}/praia" "${INSTALL_DIR}/bin/praia"
     $SUDO chmod +x "${INSTALL_DIR}/bin/praia"
     $SUDO cp -R "${TMPDIR}/lib/praia/grains" "${INSTALL_DIR}/lib/praia/"
-    $SUDO cp -R "${TMPDIR}/lib/praia/sand" "${INSTALL_DIR}/lib/praia/"
+    # Sand is now a regular global grain under lib/praia/ext_grains/sand/
+    # (so `sand install -g sand@<ver>` can self-update via the same code
+    # path that installs any other grain). The release tarball stages it
+    # at lib/praia/ext_grains/sand; we copy only that subdir to avoid
+    # clobbering any third-party grains the user already installed.
+    $SUDO mkdir -p "${INSTALL_DIR}/lib/praia/ext_grains"
+    $SUDO cp -R "${TMPDIR}/lib/praia/ext_grains/sand" "${INSTALL_DIR}/lib/praia/ext_grains/"
     # Plugin headers — installed alongside the binary so users can build
     # native plugins (`praia --include-path` resolves here) without a Praia
     # source checkout.
@@ -116,12 +127,18 @@ main() {
         $SUDO cp -R "${TMPDIR}/lib/praia/lib" "${INSTALL_DIR}/lib/praia/"
     fi
 
-    # Create the sand wrapper
+    # Create the sand wrapper. Byte format MUST match
+    # sand/grains/bin.praia::wrapperContent (a Praia test enforces this)
+    # so `sand install -g sand@<ver>` self-updates produce a wrapper
+    # byte-identical to what install.sh / `make install` wrote.
+    # The sentinel comment on line 2 is what lets sand recognize this
+    # wrapper as its own on later operations (overwrite vs refuse).
     SAND_WRAPPER="${INSTALL_DIR}/bin/sand"
-    SAND_TMP="${TMPDIR}/sand"
+    SAND_TMP="${TMPDIR}/sand-wrapper"
     cat > "$SAND_TMP" <<EOF
 #!/bin/sh
-exec "${INSTALL_DIR}/bin/praia" "${INSTALL_DIR}/lib/praia/sand/main.praia" "\$@"
+# sand-managed wrapper for sand
+exec "${INSTALL_DIR}/bin/praia" "${INSTALL_DIR}/lib/praia/ext_grains/sand/main.praia" "\$@"
 EOF
     $SUDO mv "$SAND_TMP" "$SAND_WRAPPER"
     $SUDO chmod 755 "$SAND_WRAPPER"
