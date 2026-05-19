@@ -131,6 +131,8 @@ main() {
     # sand/grains/bin.praia::wrapperContent (a Praia test enforces this)
     # so `sand install -g sand@<ver>` self-updates produce a wrapper
     # byte-identical to what install.sh / `make install` wrote.
+    # Paths are POSIX single-quoted so a future bin: grain can't break
+    # out of the exec line with shell metacharacters.
     # The sentinel comment on line 2 is what lets sand recognize this
     # wrapper as its own on later operations (overwrite vs refuse).
     SAND_WRAPPER="${INSTALL_DIR}/bin/sand"
@@ -138,7 +140,7 @@ main() {
     cat > "$SAND_TMP" <<EOF
 #!/bin/sh
 # sand-managed wrapper for sand
-exec "${INSTALL_DIR}/bin/praia" "${INSTALL_DIR}/lib/praia/ext_grains/sand/main.praia" "\$@"
+exec '${INSTALL_DIR}/bin/praia' '${INSTALL_DIR}/lib/praia/ext_grains/sand/main.praia' "\$@"
 EOF
     $SUDO mv "$SAND_TMP" "$SAND_WRAPPER"
     $SUDO chmod 755 "$SAND_WRAPPER"
