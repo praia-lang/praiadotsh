@@ -51,7 +51,7 @@ main() {
 
     if [ -x "${INSTALL_DIR}/bin/praia" ]; then
         CURRENT="$("${INSTALL_DIR}/bin/praia" -v 2>/dev/null | awk '{print $NF}')"
-        if [ "$CURRENT" = "$VERSION" ]; then
+        if [ "$CURRENT" = "v$VERSION" ]; then
             echo "Praia ${VERSION} is already installed at ${INSTALL_DIR}/bin/praia."
             exit 0
         fi
