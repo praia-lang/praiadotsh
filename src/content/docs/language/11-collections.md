@@ -184,12 +184,114 @@ config |> keys |> print          // ["host", "port"]
 config |> values |> print        // ["localhost", 8080]
 ```
 
+## Sets
+
+Sets hold an unordered collection of unique values. Elements must be hashable: `nil`, bool, int, float, string, or tagged values — the same rules as map keys. Arrays, maps, instances, and other sets aren't hashable and can't be elements.
+
+```praia
+let primes = #{2, 3, 5, 7, 11}
+let mixed  = #{1, "two", true, nil, 3.14}
+let empty  = #{}
+```
+
+Literal syntax: `#{...}`. The `#` distinguishes a set from a map literal — `{}` is an empty map, `#{}` is an empty set. Set literals dedup on construction: `#{1, 1, 2}` has size 2.
+
+### Equality
+
+Two sets are equal when they contain the same elements regardless of order:
+
+```praia
+#{1, 2, 3} == #{3, 2, 1}     // true
+#{1, 2} == #{1, 2, 3}        // false
+```
+
+### Iteration
+
+`for-in` over a set visits each element exactly once. Order is unspecified.
+
+```praia
+for (x in #{10, 20, 30}) {
+    print(x)
+}
+```
+
+### Spread
+
+Spread accepts a set or an array — elements go into the resulting set with dedup-on-insert.
+
+```praia
+let a = #{1, 2, 3}
+#{0, ...a, 4}        // #{0, 1, 2, 3, 4}
+#{0, ...[1, 2, 3]}   // #{0, 1, 2, 3}
+#{1, ...#{1, 2}}     // #{1, 2}
+```
+
+### Set methods
+
+| Method | Description |
+|--------|-------------|
+| `.add(x)` | Insert `x`. Returns `true` if newly added, `false` if already present. |
+| `.remove(x)` | Remove `x`. Returns `true` if it was present, `false` otherwise. |
+| `.has(x)` | `true` if `x` is in the set. |
+| `.size()` | Number of elements (same as `len(s)`). |
+| `.clear()` | Remove every element. |
+| `.toArray()` | Return a new array of the elements (order unspecified). |
+| `.clone()` | Return an independent copy. |
+| `.union(other)` | New set with every element of `self` or `other`. |
+| `.intersection(other)` | New set with elements in both. |
+| `.difference(other)` | New set with elements in `self` but not in `other`. |
+| `.isSubset(other)` | `true` if every element of `self` is in `other` (empty set is a subset of everything). |
+
+```praia
+let a = #{1, 2, 3}
+let b = #{2, 3, 4}
+
+a.union(b)            // #{1, 2, 3, 4}
+a.intersection(b)     // #{2, 3}
+a.difference(b)       // #{1}
+a.isSubset(#{1, 2, 3, 4})  // true
+
+a.add(99)             // true → a is now #{1, 2, 3, 99}
+a.has(2)              // true
+a.size()              // 4
+```
+
+### Union via `+`
+
+For parity with arrays (`+` concatenates) and maps (`+` merges), the `+` operator on two sets returns their union — same as `.union()`:
+
+```praia
+#{1, 2} + #{3, 4}    // #{1, 2, 3, 4}
+#{1, 2} + #{2, 3}    // #{1, 2, 3}  — dedup
+```
+
+### Set ↔ array
+
+Use `.toArray()` to convert a set to an array. To go the other way, spread an array into a set literal:
+
+```praia
+let arr = [1, 2, 2, 3]
+let s = #{...arr}     // #{1, 2, 3}
+let back = s.toArray()  // [1, 2, 3] — order unspecified
+```
+
+### Reference semantics
+
+Sets, like arrays and maps, are references:
+
+```praia
+let a = #{1, 2}
+let b = a
+b.add(3)
+print(a)              // #{1, 2, 3}
+```
+
 ## Built-in functions
 
 | Function | Description |
 |----------|-------------|
 | `print(args...)` | Print values separated by spaces, with newline |
-| `len(value)` | Length of an array, string, or map |
+| `len(value)` | Length of an array, string, map, or set |
 | `push(array, value)` | Append a value to an array |
 | `pop(array)` | Remove and return the last element |
 | `type(value)` | Return the type as a string |
@@ -200,8 +302,10 @@ config |> values |> print        // ["localhost", 8080]
 print(len([1, 2, 3]))      // 3
 print(len("hello"))         // 5
 print(len({a: 1, b: 2}))   // 2
+print(len(#{1, 2, 3}))     // 3
 
 print(type(42))             // int
+print(type(#{1}))           // set
 print(str(42) + "!")        // 42!
 print(num("3.14") * 2)     // 6.28
 ```

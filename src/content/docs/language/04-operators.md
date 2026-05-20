@@ -12,7 +12,9 @@ sidebar:
 3 * 7       // 21
 15 / 4      // 3.75
 17 % 5      // 2
-[1,2] + [3,4]  // [1, 2, 3, 4]  (array concat)
+[1,2] + [3,4]    // [1, 2, 3, 4]      (array concat)
+{a:1} + {b:2}    // {a: 1, b: 2}      (map merge — RHS keys win)
+#{1,2} + #{2,3}  // #{1, 2, 3}        (set union)
 ```
 
 ## Comparison

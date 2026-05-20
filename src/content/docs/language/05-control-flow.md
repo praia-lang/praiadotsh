@@ -148,6 +148,16 @@ for (entry in config) {
 }
 ```
 
+## for-in (sets)
+
+Iterating a set visits each element exactly once. Order is unspecified.
+
+```praia
+for (p in #{2, 3, 5, 7}) {
+    print(p)
+}
+```
+
 ## break and continue
 
 `break` exits the innermost loop. `continue` skips to the next iteration. Both work in `while`, `for`, and `for-in`.

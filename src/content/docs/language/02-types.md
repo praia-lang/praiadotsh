@@ -16,6 +16,7 @@ at runtime; use them with the `is` operator (`x is "int"`, `x is MyClass`).
 | `string`    | `"hello"`                           | UTF-8, supports interpolation, escape sequences, and Unicode (`\u{...}`). |
 | `array`     | `[1, 2, 3]`                         | Ordered, mixed-type, reference semantics. |
 | `map`       | `{name: "Ada", [42]: "answer"}`     | Hash map. Reference semantics. Keys can be any hashable value: `nil`, bool, int, float, string, or tagged value. Bare-identifier keys (`name`) desugar to string keys; bracket-expression keys (`[42]`) take the evaluated value. |
+| `set`       | `#{1, 2, 3}`                        | Unordered collection of unique values. Reference semantics. Elements must be hashable (same rules as map keys). Literal syntax `#{...}` distinguishes from map `{...}`; empty set is `#{}`. |
 | `function`  | `func add(a, b) { ... }`            | First-class, supports closures. Includes user `func` / `lam` and built-in natives. |
 | `instance`  | `MyClass(...)`                      | Instance of a user-defined `class`. Use `x is MyClass` to check class identity (walks the `extends` chain). |
 | `tagged`    | `Ok(42)`, `Err("nope")`             | Tagged values from a `CapitalizedName(args...)` constructor call. Used for sum types and result-like patterns; see `match`. |
@@ -30,6 +31,7 @@ print(type(3.14))       // float
 print(type("hi"))       // string
 print(type([1, 2]))     // array
 print(type({a: 1}))     // map
+print(type(#{1, 2}))    // set
 print(type(Ok(1)))      // tagged
 ```
 
