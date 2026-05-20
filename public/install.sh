@@ -13,7 +13,7 @@ main() {
     case "$OS" in
         Linux)  OS="linux" ;;
         Darwin) OS="macos" ;;
-        *) echo "Error: unsupported OS: $OS" >&2; exit 1 ;;
+        *) echo "Error: unsupported OS: $OS\nPlease build from source: https://github.com/praia-lang/praia" >&2; exit 1 ;;
     esac
 
     # Detect architecture
@@ -21,7 +21,7 @@ main() {
     case "$ARCH" in
         x86_64|amd64)  ARCH="x86_64" ;;
         aarch64|arm64) ARCH="arm64" ;;
-        *) echo "Error: unsupported architecture: $ARCH" >&2; exit 1 ;;
+        *) echo "Error: unsupported architecture: $ARCH\nPlease build from source: https://github.com/praia-lang/praia" >&2; exit 1 ;;
     esac
 
     PLATFORM="${OS}-${ARCH}"
@@ -49,7 +49,6 @@ main() {
     FILENAME="praia-${PLATFORM}.tar.gz"
     URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
 
-    # Skip if we're already on this version. `praia -v` prints "Praia Version 0.5.1".
     if [ -x "${INSTALL_DIR}/bin/praia" ]; then
         CURRENT="$("${INSTALL_DIR}/bin/praia" -v 2>/dev/null | awk '{print $NF}')"
         if [ "$CURRENT" = "$VERSION" ]; then
@@ -149,8 +148,6 @@ EOF
     if command -v praia >/dev/null 2>&1; then
         echo ""
         echo "Praia ${VERSION} installed successfully!"
-        echo ""
-        praia -v
         echo ""
         echo "Run 'praia' to start the REPL, or 'praia file.praia' to run a script."
     else
