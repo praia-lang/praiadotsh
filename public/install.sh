@@ -144,6 +144,20 @@ EOF
     $SUDO mv "$SAND_TMP" "$SAND_WRAPPER"
     $SUDO chmod 755 "$SAND_WRAPPER"
 
+    # macOS only: trigger Gatekeeper's first-run assessment now so the
+    # user doesn't pay a multi-second pause on their first real `praia`
+    # invocation. On a freshly downloaded (quarantined) binary, macOS
+    # does an online notarization-ticket lookup + OCSP cert revocation
+    # check the first time the binary executes — usually 2-5 seconds.
+    # The check is per-hash, per-machine; once it succeeds, every
+    # subsequent run is instant. We just want it to happen *here*,
+    # behind a clearly labeled install step, instead of surprising
+    # the user when they type `praia` for the first time.
+    if [ "$OS" = "macos" ]; then
+        echo "Triggering macOS Gatekeeper check (one-time, takes a few seconds)..."
+        "${INSTALL_DIR}/bin/praia" -v >/dev/null 2>&1 || true
+    fi
+
     # Verify
     if command -v praia >/dev/null 2>&1; then
         echo ""
@@ -167,7 +181,7 @@ EOF
         *":$HOME/.praia/bin:"*) ;;
         *)
             echo ""
-            echo "Note: 'sand install -g <grain>' as a non-root user writes CLIs"
+            echo "Note: 'sand install -g <grain>' as a non-root user writes executables"
             echo "to ~/.praia/bin/. Add it to your PATH if you plan to use them:"
             echo "  export PATH=\"\$HOME/.praia/bin:\$PATH\""
             ;;
