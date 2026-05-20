@@ -160,6 +160,21 @@ EOF
         echo "Make sure ${INSTALL_DIR}/bin is in your PATH:"
         echo "  export PATH=\"${INSTALL_DIR}/bin:\$PATH\""
     fi
+
+    # Heads-up for sand's user-scope global installs. Non-root
+    # `sand install -g <grain>` writes grain CLIs to ~/.praia/bin/,
+    # which isn't on PATH on most setups. Print a one-liner here so
+    # users know to add it ahead of their first `sand install -g`
+    # rather than discovering the missing wrapper at run time.
+    case ":$PATH:" in
+        *":$HOME/.praia/bin:"*) ;;
+        *)
+            echo ""
+            echo "Note: 'sand install -g <grain>' as a non-root user writes CLIs"
+            echo "to ~/.praia/bin/. Add it to your PATH if you plan to use them:"
+            echo "  export PATH=\"\$HOME/.praia/bin:\$PATH\""
+            ;;
+    esac
 }
 
 main
