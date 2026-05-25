@@ -110,6 +110,141 @@ When `followRedirects` is `false`, the 3xx response is returned as-is with `Loca
 
 Connect failures throw "connect timed out after Nms"; read failures throw "HTTP read timed out".
 
+### Sessions — `http.session`
+
+For scripts that issue multiple requests to the same host, an `http.session` reuses the underlying TCP/TLS connection across calls and applies session-default headers and options -- skipping a fresh DNS lookup + TCP handshake + (for HTTPS) TLS handshake on every request beyond the first.
+
+```praia
+let s = http.session({
+    headers: {"User-Agent": "my-app/1.0"},
+    timeout: 30,
+})
+
+let r1 = http.get(s, "https://api.example.com/users")
+let r2 = http.get(s, "https://api.example.com/posts")  // reuses r1's socket
+http.close(s)
+```
+
+`http.session(opts?)` returns an opaque handle that prints as `<external:http.session>`. Pass it as the first argument to any of `http.get` / `http.post` / `http.request`; the call shape stays the same otherwise:
+
+| Stateless | Session-bound |
+|-----------|---------------|
+| `http.get(url)` | `http.get(session, url)` |
+| `http.post(url, body)` | `http.post(session, url, body)` |
+| `http.request(opts)` | `http.request(session, opts)` |
+
+The connection pool is keyed by `scheme://host:port`, so requests to different hosts on the same session each get their own pooled connection.
+
+#### Defaults layering
+
+Session-default `headers` and options are applied as the base for every call. Per-call values override on key conflict:
+
+```praia
+let s = http.session({
+    headers: {"User-Agent": "my-app/1.0", "X-Trace-Id": "abc"},
+    timeout: 30,
+})
+
+http.request(s, {
+    url: "https://api.example.com/users",
+    headers: {"X-Trace-Id": "xyz"},   // overrides session's X-Trace-Id
+    timeout: 5,                        // overrides session timeout
+})
+// User-Agent is inherited from the session.
+```
+
+The `session(opts?)` options shape mirrors `http.request`'s — `headers`, `timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle` — minus `method`/`url`/`body`, which only make sense per-call.
+
+#### Connection reuse and stale-conn recovery
+
+The pool holds at most one idle connection per host. Before reuse, a fast `poll()` probe checks whether the peer closed since the conn was stored. If the probe passes but the first `send()` fails anyway (the classic stale-connection signature), the session retries once on a fresh socket. From the caller's perspective: the call returns the response.
+
+A response is **not** pooled if it sets `Connection: close`, its body framing was read-until-EOF, or any I/O error fired during the request.
+
+#### Closing
+
+`http.close(session)` is idempotent. If the session goes out of scope without explicit close, the GC's sweep drains the pool. Explicit close is for deterministic cleanup:
+
+```praia
+http.close(s)
+```
+
+#### Pool bounds
+
+The session keeps at most `poolSize` idle connections (one per `scheme://host:port`) and applies an idle TTL of `poolIdleSecs` to each. Both are configurable on `http.session(opts)`:
+
+- **`poolSize`** -- integer; max idle connections, LRU-evicted past this. Defaults to **100**, which covers all realistic API workloads.
+- **`poolIdleSecs`** -- float; per-connection idle timeout. Conns older than this on next take are dropped instead of reused (avoiding the stale-conn EPIPE retry). Defaults to **90 seconds**, matching the de facto keepalive timeout of nginx / apache / Go net/http. Set to `0` to disable the TTL entirely.
+
+```praia
+let s = http.session({poolSize: 20, poolIdleSecs: 30})
+```
+
+#### Streaming through a session
+
+`http.openStream` is polymorphic on the first arg: pass a session and the stream inherits the session's default headers and options. The stream itself always opens a fresh socket -- there's no pool-of-streams.
+
+```praia
+let s = http.session({headers: {"User-Agent": "my-app/1.0"}})
+let stream = http.openStream(s, {url: "https://example.com/big.json"})
+// User-Agent inherited from session.
+```
+
+#### Not in this session yet
+
+- **No cookie jar on `http.session`.** Use the [`httpx` grain](#cookie-aware-sessions----httpx) for auto-threaded cookies (`httpx.Session.stream` covers the streaming path too), or pair `http.session` with the `cookie` grain's `Jar` class manually. The session response's `cookies` array still surfaces incoming `Set-Cookie` headers either way.
+- **No pool-of-streams.** `http.openStream(session, opts)` opens fresh every time.
+
+### Cookie-aware sessions — `httpx`
+
+The [`httpx`](https://github.com/praia-lang/praia/blob/main/grains/httpx.praia) grain composes `http.session` with the `cookie.Jar` from the `cookie` grain. Every request through an `httpx.Session`:
+
+1. Attaches a `Cookie` header for cookies in the jar that match the URL (unless the caller already set `Cookie` explicitly).
+2. Issues the request via the underlying `http.session` (keepalive + default opts/headers).
+3. Feeds any `Set-Cookie` headers from the response back into the jar.
+
+```praia
+use "httpx"
+
+let s = httpx.session({headers: {"User-Agent": "my-app/1.0"}})
+
+let login = s.post("https://api.example.com/login", '{"u": "x", "p": "y"}')
+// Set-Cookie absorbed into s.jar()
+
+let profile = s.get("https://api.example.com/profile")
+// Cookie attached automatically
+
+s.close()
+```
+
+Methods mirror the underlying `http.*` surface:
+
+| Method | Calls |
+|--------|-------|
+| `s.get(url, opts?)` | `http.get(s._session, url, ...)` with cookies threaded |
+| `s.post(url, body, opts?)` | `http.post(...)` with cookies threaded |
+| `s.request(opts)` | `http.request(...)` with cookies threaded |
+| `s.stream(url, opts?)` | `http.openStream(...)` with cookies threaded; returns a stream handle |
+| `s.jar()` | The underlying `cookie.Jar` — mutable; `.clear()` to drop all cookies |
+| `s.close()` | Closes the underlying `http.session`. Idempotent. |
+
+The options map mirrors `http.session`'s shape (`timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `headers`) plus one extra key:
+
+- **`jar`** — if provided, the session uses this `cookie.Jar` instance instead of creating an empty one. Useful for resuming cookie state across runs, or sharing one jar across multiple sessions.
+
+#### Caller-supplied Cookie wins
+
+Setting `headers: {Cookie: "..."}` on a per-call basis bypasses the jar for that call. The jar still ingests the response's `Set-Cookie` afterwards.
+
+```praia
+let r = s.request({url: someUrl,
+                   headers: {Cookie: "manual=override"}})
+```
+
+#### When to use `httpx` vs `http.session` + `cookie.Jar`
+
+Use `httpx` when you want cookies threaded automatically — the typical case for any script that follows a login flow or talks to a session-cookie-based API. Pair `http.session` with `cookie.Jar` manually only when you need fine-grained control over when cookies attach / ingest.
+
 ### Streaming responses — `http.openStream`
 
 `http.request` slurps the body into memory. `http.openStream` returns a stream handle so you can consume the response incrementally — for downloads bigger than RAM, NDJSON feeds, log tails, etc.

@@ -6,6 +6,8 @@ sidebar:
 
 Built-in SQLite database support. Available when built with libsqlite3.
 
+`sqlite.open` returns an opaque connection handle that prints as `<external:sqlite.connection>`. Operations are free functions on the `sqlite` namespace that take the connection as their first argument. The handle is automatically closed when the last reference drops (during the GC sweep); for deterministic cleanup call `sqlite.close(db)` or use `defer`.
+
 ## Opening a database
 
 ```praia
@@ -15,21 +17,23 @@ let db = sqlite.open(":memory:")       // in-memory
 
 ## Queries
 
-`db.query(sql, params?)` executes a SELECT and returns an array of maps (one per row):
+`sqlite.query(db, sql, params?)` executes a SELECT and returns an array of maps (one per row):
 
 ```praia
-let users = db.query("SELECT * FROM users WHERE age > ?", [18])
+let users = sqlite.query(db, "SELECT * FROM users WHERE age > ?", [18])
 for (user in users) {
     print(user.name, user.age)
 }
 ```
 
+INTEGER columns are returned as Praia ints, preserving the full 64-bit range; REAL as floats; TEXT as strings; NULL as `nil`.
+
 ## Executing statements
 
-`db.run(sql, params?)` executes INSERT/UPDATE/DELETE and returns `{changes, lastId}`:
+`sqlite.run(db, sql, params?)` executes INSERT/UPDATE/DELETE/DDL and returns `{changes, lastId}`:
 
 ```praia
-let result = db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Ada", 36])
+let result = sqlite.run(db, "INSERT INTO users (name, age) VALUES (?, ?)", ["Ada", 36])
 print(result.lastId)      // auto-increment id
 print(result.changes)     // rows affected
 ```
@@ -40,18 +44,36 @@ Always use `?` placeholders -- they prevent SQL injection:
 
 ```praia
 // Safe
-db.query("SELECT * FROM users WHERE name = ?", [name])
+sqlite.query(db, "SELECT * FROM users WHERE name = ?", [name])
 
 // Unsafe -- never do this
-db.query("SELECT * FROM users WHERE name = '" + name + "'")
+sqlite.query(db, "SELECT * FROM users WHERE name = '" + name + "'")
 ```
 
-Parameters are bound by type: strings, numbers, bools, and nil are all handled automatically.
+Parameters are bound by type: strings, ints, floats, bools, and nil are all handled automatically.
+
+## Transactions
+
+`sqlite.run` also accepts transaction-control statements:
+
+```praia
+sqlite.run(db, "BEGIN")
+try {
+    sqlite.run(db, "UPDATE accounts SET balance = balance - 100 WHERE id = ?", [from])
+    sqlite.run(db, "UPDATE accounts SET balance = balance + 100 WHERE id = ?", [to])
+    sqlite.run(db, "COMMIT")
+} catch (e) {
+    sqlite.run(db, "ROLLBACK")
+    throw e
+}
+```
 
 ## Closing
 
+`sqlite.close(db)` is idempotent -- calling it twice (or after the GC has already closed the handle) is a no-op, never a double-free:
+
 ```praia
-db.close()
+sqlite.close(db)
 ```
 
 ## Example: REST API with SQLite
@@ -60,18 +82,18 @@ db.close()
 use "router"
 
 let db = sqlite.open(":memory:")
-db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT, done INT)")
+sqlite.run(db, "CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT, done INT)")
 
 let server = router.create()
 
 server.get("/todos", lam{ req, params in
-    let todos = db.query("SELECT * FROM todos")
+    let todos = sqlite.query(db, "SELECT * FROM todos")
     return http.json(todos)
 })
 
 server.post("/todos", lam{ req, params in
     let todo = json.parse(req.body)
-    db.run("INSERT INTO todos (title, done) VALUES (?, ?)", [todo.title, 0])
+    sqlite.run(db, "INSERT INTO todos (title, done) VALUES (?, ?)", [todo.title, 0])
     return http.json({ok: true}, 201)
 })
 
