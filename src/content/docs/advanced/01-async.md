@@ -318,7 +318,7 @@ If a handler needs to communicate progress back to a *later* request (e.g. polli
 let updates = Queue(100)
 let _job = async runConversion(jobId, updates)
 // the handler for /progress/:id reads from a per-job state file or sqlite
-// row that the background task wrote — channels are FIFO so they don't
+// row that the background task wrote — queues are FIFO so they don't
 // fit "look up by id"
 
 // 2. Disk- or db-backed job state
