@@ -41,7 +41,7 @@ use "colors"
 | `ini` | INI file parser |
 | `html` | HTML utilities |
 | `markdown` | Markdown processing |
-| `template` | String templating |
+| `template` | Mustache-style templating. `{{ key }}` HTML-escapes by default; `{{{ key }}}` emits raw. `{{# each xs }} ... {{/ each }}` blocks |
 
 ### Terminal & Output
 
@@ -181,6 +181,24 @@ let users = [
     {name: "Bob", age: 25, role: "user"}
 ]
 print(table.render(users))
+```
+
+## Example: template
+
+```praia
+use "template"
+
+// Default: values are HTML-escaped — safe to pass user input.
+template.render("Hello {{ name }}", {name: "<script>"})
+// → "Hello &lt;script&gt;"
+
+// Triple braces emit raw HTML — only use for trusted content.
+template.render("Hello {{{ name }}}", {name: "<b>Ada</b>"})
+// → "Hello <b>Ada</b>"
+
+// Each-block over an array of maps.
+let tmpl = "{{# each users }}\n- {{ name }}\n{{/ each }}"
+print(template.render(tmpl, {users: [{name: "Ada"}, {name: "Bob"}]}))
 ```
 
 ## Example: hex
