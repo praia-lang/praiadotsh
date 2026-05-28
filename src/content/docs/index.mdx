@@ -29,7 +29,7 @@ hero:
 
 **Lightweight generators.** Generators use stack snapshots — no threads, no OS resources. Create thousands of them. They integrate directly with `for-in` loops for lazy evaluation.
 
-**Precise numbers.** 64-bit integers stay exact. `10 / 2` returns `5` (int), not `5.0`. Overflow promotes to float instead of wrapping silently.
+**Precise numbers.** 64-bit integers stay exact up to 2^63 — no silent precision loss above 2^53 like JS or Lua. Int overflow promotes to float instead of wrapping. `/` always returns float (use `math.idiv()` for integer division).
 
 **Sane defaults.** Only `nil` and `false` are falsy. `UPPER_CASE` names warn on reassignment. `for-in` snapshots the collection so mutation mid-loop is safe.
 
