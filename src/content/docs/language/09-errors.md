@@ -87,7 +87,23 @@ Defers run even on exceptions. If a defer throws, other defers still run.
 
 ## ensure
 
-`ensure` is an early-exit guard (like Swift's `guard`). If the condition is falsy, the `else` block runs -- which should exit the scope (typically `return` or `throw`).
+`ensure` is an early-exit guard, modelled on Swift's `guard`. If the condition is falsy, the `else` block runs — and the `else` block **must** terminate. Code after `ensure` only runs when the condition held, and the parser enforces this property by recognising exactly these terminators:
+
+- `return` (with or without a value)
+- `throw`
+- `break` or `continue` (inside a loop)
+- a nested `if`/`elif`/`else` where every branch terminates (the parser only checks each branch terminates — mixing kinds is fine, e.g. one branch can `return` while another `throw`s)
+- a block whose last statement terminates
+
+The check is purely syntactic — function calls like `sys.exit(1)` are *not* recognised on their own (a shadowed `sys` could silently subvert that guarantee). For CLI bail-out write `sys.exit(1); return` — the unreachable `return` gives the parser its terminator.
+
+Anything else is a parse error:
+
+```text
+[line 3:col 5] Error at 'ensure': ensure: else block must terminate
+via 'return', 'throw', 'break', or 'continue' (use 'if' for log-
+and-continue)
+```
 
 ```praia
 func greet(name) {
@@ -115,6 +131,49 @@ func processAge(age) {
     print("valid age: %{age}")
 }
 ```
+
+### Optional unwrap binding — `ensure let`
+
+Praia also supports Swift-style `guard let` for the "bail on nil, otherwise bind the value" pattern:
+
+```praia
+func printName(name) {
+    ensure let unwrapped = name else {
+        print("you need to provide a name")
+        return
+    }
+    print(unwrapped)   // `unwrapped` is in scope here
+}
+
+printName("Ada")   // Ada
+printName(nil)     // you need to provide a name
+```
+
+The `else` block runs *only* when the right-hand expression evaluates to `nil`. Any other value — including falsy ones like `false`, `0`, or `""` — binds to the name and the surrounding scope continues:
+
+```praia
+ensure let v = false else { return "skipped" }
+// v is false here; the else did not run.
+```
+
+This is the key difference from the conditional form `ensure (cond) else`, which fires on any falsy value. Use the binding form when you mean "is the optional present?", and the conditional form when you mean "is this truthy?".
+
+The same parse-time check applies: the `else` block must terminate.
+
+### When to reach for `if` instead
+
+`ensure` is exclusively for early-exit guards. If your check is "log a warning and keep going with a default," reach for plain `if`:
+
+```praia
+let content = readFile("config.json")
+if (!content) {
+    print("config missing, using defaults")
+    content = "{}"
+}
+// continues with content set either way
+```
+
+Writing this as `ensure (content) else { content = "{}" }` is a parse error — the else block doesn't terminate.
 
 ## Error stack traces
 

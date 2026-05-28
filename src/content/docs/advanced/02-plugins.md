@@ -4,7 +4,14 @@ sidebar:
   order: 2
 ---
 
-Praia can load native C++ modules at runtime via `loadNative()`. This lets you write performance-critical code or wrap C/C++ libraries.
+Praia loads native modules at runtime via `loadNative()`. There are two SDKs:
+
+| SDK | Header | Stability | When to reach for it |
+|-----|--------|-----------|---------------------|
+| C++ source SDK | `praia_plugin.h` | **Source-coupled to the engine's C++ toolchain.** Re-exports `Value` (`std::variant`), `std::shared_ptr` containers, `std::function`, templates, `RuntimeError` exceptions. Variant/shared_ptr/function layouts differ across compilers and minor stdlib releases. | You control the build (same toolchain compiles engine + plugin). Canonical for source builds and the `make plugin` target. |
+| C stable ABI | `praia_plugin_c.h` | **Stable across compilers and languages.** Opaque pointers + plain function-pointer ABI; works from C, Rust, Zig, Go (cgo), Swift -- anything with a C FFI. | Distributing prebuilt binaries via the `prebuilt:` block in `grain.yaml`. Writing the plugin in any language other than C++. Building portable artifacts. |
+
+Both share the same `PRAIA_PLUGIN_ABI_VERSION` gate -- a single engine binary loads plugins built with either header. This page covers the C++ scaffolding first; jump to [Writing plugins in pure C](#writing-plugins-in-pure-c) for the C facade.
 
 ## Scaffolding with Sand
 
@@ -65,6 +72,80 @@ make plugin SRC=mymodule.cpp OUT=mymodule.so       # Linux
 let mod = loadNative("./mymodule")
 print(mod.double(21))  // 42
 ```
+
+## Writing plugins in pure C
+
+If you prefer C -- or you're binding to Praia from Rust, Zig, Go, Swift, or any other language with a C FFI -- `#include "praia_plugin_c.h"` instead. It exposes the same engine functionality as `praia_plugin.h` through pure-C signatures: opaque handles (`PraiaValue`, `PraiaPromise`), function pointers + `void* userdata` for callbacks, explicit `release`/`pin`/`unpin` lifetime calls. Same engine binary, same ABI version, same `loadNative` gate.
+
+**Build (macOS):**
+
+```sh
+gcc -std=c11 -shared -fPIC -I$(praia --include-path) \
+    -undefined dynamic_lookup -o mymodule.dylib mymodule.c
+```
+
+**Build (Linux):**
+
+```sh
+gcc -std=c11 -shared -fPIC -I$(praia --include-path) \
+    -o mymodule.so mymodule.c
+```
+
+**Minimal plugin** (`mymodule.c`):
+
+```c
+#include "praia_plugin_c.h"
+#include <stdio.h>
+
+PRAIA_C_DECLARE_ABI();
+PRAIA_C_PLUGIN_METADATA("mymod", "0.1.0", "Does the thing");
+
+static PraiaValue greet(PraiaArgs args, void* ud) {
+    (void) ud;
+    if (praia_args_count(args) != 1) {
+        praia_throw("greet: expected 1 argument");
+        return NULL;
+    }
+    PraiaValue name = praia_args_get(args, 0);
+    size_t n = 0;
+    const char* s = praia_value_as_string(name, &n);
+    char buf[256];
+    int len = snprintf(buf, sizeof(buf), "hello, %.*s", (int)n, s);
+    return praia_value_string_n(buf, (size_t)len);
+}
+
+void praia_register(PraiaMapHandle* module) {
+    PraiaValue fn = praia_make_native("mymod.greet", 1, greet, NULL);
+    praia_module_set(module, "greet", fn);
+    praia_value_release(fn);
+}
+```
+
+### Lifetime contract
+
+Three rules cover the whole API:
+
+- **Returned handles are owned.** Every `PraiaValue` you receive *from* the facade (constructors, `praia_value_map_get`, `praia_call`, `praia_promise_future`) must be released with `praia_value_release` when you're done.
+- **Setter args are copied.** When you hand a `PraiaValue` to `praia_value_map_set`, `praia_value_array_push`, `praia_module_set`, etc., the engine takes its own reference. You still own (and must release) the handle you passed in.
+- **Callback args are borrowed.** Inside a `PraiaNativeFn`, the handles returned by `praia_args_get` belong to the engine for the duration of the call. Don't release them. If you need them to outlive the call, `praia_value_clone` first.
+
+A native callback's *return value* transfers ownership to the engine -- return the `PraiaValue` directly without releasing it.
+
+### Error model
+
+C has no exceptions, so the facade uses a two-step convention:
+
+1. The native calls `praia_throw("message")` to stage an error.
+2. The native returns `NULL`.
+
+The facade thunk picks up the staged message and throws a `RuntimeError` on the C++ side, which propagates to user code identically to a C++ plugin throw. A `NULL` return without a prior `praia_throw` is also caught, with a placeholder message.
+
+### Working examples
+
+- `examples/plugins/cmod.c` — pure-C plugin demonstrating string/int ops, error throwing, external handles with deleters, and map construction.
+- `examples/plugins/rust-cmod/` — the same shape in pure Rust (hand-rolled `extern "C"` bindings against `praia_plugin_c.h`). Same approach works for Zig, Go via cgo, Swift, and any other language with a C FFI.
+
+Tests for the C example live at `tests/test_loadnative_c.praia`.
 
 ## ABI versioning
 
@@ -648,6 +729,74 @@ Include a single header:
 ```
 
 This re-exports: `value.h` (Value, PraiaArray, PraiaMap, PraiaSet, Callable, RuntimeError), `gc_heap.h` (gcNew), `builtins.h` (makeNative), `praia_runtime.h` (the `praia::call` callback helper).
+
+## Distributing prebuilt binaries
+
+Native plugins normally require the end user to have a C++ toolchain -- `sand install` clones your grain, but the user still has to run `make` to produce the `.dylib`/`.so` that `main.praia` loads. That gates the plugin ecosystem behind "has g++ and the right library headers" -- a real barrier for casual users.
+
+`sand` supports a `prebuilt:` block in `grain.yaml` that points at per-platform binaries you publish to a GitHub Release (or any HTTPS host). At install time, sand picks the entry matching the user's `<platform>-<arch>`, downloads the binary, verifies the sha256, and drops it into the grain's `plugins/` directory -- so the platform-aware loader in `main.praia` finds it unchanged. If no entry matches (unsupported platform, no block), sand falls back to today's clone-and-build path.
+
+### Schema
+
+```yaml
+name: curses
+version: 1.1.1
+main: main.praia
+prebuilt:
+  darwin-arm64:
+    url: https://github.com/praia-lang/curses/releases/download/v1.1.1/curses.dylib
+    integrity: sha256-1a2b3c4d…
+  darwin-x86_64:
+    url: https://github.com/praia-lang/curses/releases/download/v1.1.1/curses-x86_64.dylib
+    integrity: sha256-4d5e6f7a…
+  linux-x86_64:
+    url: https://github.com/praia-lang/curses/releases/download/v1.1.1/curses-linux-x86_64.so
+    integrity: sha256-7a8b9c0d…
+  linux-aarch64:
+    url: https://github.com/praia-lang/curses/releases/download/v1.1.1/curses-linux-aarch64.so
+    integrity: sha256-d0e1f2a3…
+```
+
+**Platform key** -- `<platform>-<arch>`, where `platform` is `darwin` or `linux` and `arch` is what `uname -m` returns on the target (`arm64`, `x86_64`, `aarch64`). On macOS you can publish a single `darwin-universal` entry (a `lipo`-merged Mach-O) -- sand consults that as a fallback when no exact `darwin-<arch>` entry matches.
+
+**URL** -- must be HTTPS. http:// and file:// are rejected; the sha256 check provides content integrity, HTTPS provides transport integrity, and together they make a tampered binary observable before it runs.
+
+**Integrity** -- subresource-integrity-style: `sha256-<64 lowercase hex chars>`. Sand recomputes the hash on the downloaded body and refuses to install on mismatch.
+
+**Destination** -- sand writes the downloaded file to `plugins/<basename(url)>`. Keep your URLs ending in the same filename your `main.praia` loader expects (`<name>.dylib` on darwin, `<name>-linux-<arch>.so` on linux -- the convention every existing plugin grain uses today).
+
+### Authoring workflow
+
+```sh
+# 1. Build for each platform you publish.
+make                                                    # macOS host build
+./build-linux.sh                                        # cross-compile via Docker
+
+# 2. Compute hashes — prepend "sha256-" to the digest.
+shasum -a 256 plugins/curses.dylib                      # darwin-arm64
+shasum -a 256 plugins/curses-linux-x86_64.so            # linux-x86_64
+
+# 3. Tag and create a release with the binaries attached.
+git tag v1.1.1 && git push --tags
+gh release create v1.1.1 plugins/curses*.{dylib,so} --generate-notes
+
+# 4. Paste the URLs (`gh release view v1.1.1` shows them) and the
+#    sha256 lines into grain.yaml under prebuilt:, commit, push.
+```
+
+End users on a published platform now run `sand install -g github.com/you/your-grain` with no toolchain at all.
+
+### Override flags
+
+- `sand install --build-from-source <grain>` -- skips the `prebuilt:` path entirely. Used when you want to audit or patch the native code locally.
+- `sand install --prebuilt-only <grain>` -- refuses to install if no `prebuilt:` entry matches your platform, rather than letting you discover the missing toolchain later. Useful for users without `g++`.
+
+### Mismatch behaviour
+
+If a download fails (HTTP error) or the sha256 doesn't match the recorded integrity, sand throws with both expected and actual values and rolls back the install -- it never installs an unverified binary. The two common causes:
+
+- **Download failure** -- almost always a wrong URL in `grain.yaml`; double-check the release name and asset filename.
+- **Hash mismatch** -- either the upstream release was re-uploaded (force-pushed tag) or someone is intercepting your fetch. Recompute the hash from the canonical release and update `grain.yaml`.
 
 ## Behavior
 

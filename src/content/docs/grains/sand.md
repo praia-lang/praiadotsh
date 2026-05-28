@@ -205,6 +205,10 @@ git tag 0.1.0
 git push origin 0.1.0
 ```
 
+### Native plugins
+
+If your grain ships a C++ plugin (a `plugins/` directory with `.cpp` source), users normally need a C++ toolchain installed to build it. You can skip that step for them by publishing prebuilt `.dylib`/`.so` binaries to a GitHub Release and declaring them under a `prebuilt:` block in `grain.yaml` -- sand will download, verify the sha256, and install the binary directly. See [Distributing prebuilt binaries](/docs/advanced/plugins#distributing-prebuilt-binaries) on the plugins page for the schema and authoring workflow.
+
 ## How it works
 
 - `sand install <url>` clones the repo, reads the grain's `grain.yaml` for its name, and copies it into `ext_grains/<name>/`.
