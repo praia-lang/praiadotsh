@@ -18,7 +18,7 @@ sidebar:
 let body = fs.read("server.log")
 let gz = zlib.gzip(body)
 fs.write("server.log.gz", gz)
-testing.assertEqual(zlib.gunzip(fs.read("server.log.gz")), body, nil)
+testing.expectEqual(zlib.gunzip(fs.read("server.log.gz")), body, nil)
 
 // HTTP body inflate when the server sets Content-Encoding: gzip
 let resp = http.get(url)
