@@ -69,6 +69,7 @@ Header names are lowercased for consistent access.
 | `maxRedirects` | 10 | Throw if a chain exceeds this |
 | `insecure` | `false` | **Skip TLS certificate verification.** Testing/dev only; equivalent to `curl -k` |
 | `caBundle` | system trust store | Path to a custom CA PEM bundle |
+| `blockPrivateHosts` | `true` | **SSRF protection.** Refuse to connect to loopback, RFC1918, link-local (incl. cloud metadata `169.254.169.254`), IPv4-mapped, multicast, and reserved address ranges. Re-applied per redirect hop. Set to `false` only when you are deliberately targeting internal hosts (local dev, internal microservices). |
 
 ```praia
 // Strict timeouts on a flaky upstream
@@ -88,7 +89,12 @@ let r = http.request({url: "https://localhost:8443/", insecure: true})
 
 // Internal CA / private PKI
 let r = http.request({url: "https://internal.corp/", caBundle: "/etc/ssl/corp-root.pem"})
+
+// Deliberately hit localhost during development
+let r = http.get("http://127.0.0.1:8080/health", {blockPrivateHosts: false})
 ```
+
+The shorthand methods accept the same options map as an optional trailing argument: `http.get(url, opts)`, `http.get(session, url, opts)`, and the equivalent shapes for `http.post`. `http.request` always takes a map.
 
 ### Redirects
 
@@ -153,7 +159,7 @@ http.request(s, {
 // User-Agent is inherited from the session.
 ```
 
-The `session(opts?)` options shape mirrors `http.request`'s — `headers`, `timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle` — minus `method`/`url`/`body`, which only make sense per-call.
+The `session(opts?)` options shape mirrors `http.request`'s — `headers`, `timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts` — minus `method`/`url`/`body`, which only make sense per-call.
 
 #### Connection reuse and stale-conn recovery
 
@@ -228,7 +234,7 @@ Methods mirror the underlying `http.*` surface:
 | `s.jar()` | The underlying `cookie.Jar` — mutable; `.clear()` to drop all cookies |
 | `s.close()` | Closes the underlying `http.session`. Idempotent. |
 
-The options map mirrors `http.session`'s shape (`timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `headers`) plus one extra key:
+The options map mirrors `http.session`'s shape (`timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts`, `headers`) plus one extra key:
 
 - **`jar`** — if provided, the session uses this `cookie.Jar` instance instead of creating an empty one. Useful for resuming cookie state across runs, or sharing one jar across multiple sessions.
 
@@ -282,6 +288,8 @@ The stream decodes three body framings transparently:
 - **`Content-Length: N`** -- exactly N bytes, then EOF.
 - **`Transfer-Encoding: chunked`** -- parses `HEXSIZE\r\n<data>\r\n` until the `0\r\n` terminator. Chunk extensions (`;k=v` after the size) are ignored.
 - **Neither header** -- read until the server closes (HTTP/1.0; HTTP/1.1 with `Connection: close`).
+
+Responses that declare **both** `Content-Length` and `Transfer-Encoding`, or **multiple conflicting `Content-Length`** lines, are rejected with a `RuntimeError` rather than silently picked one way or the other — they're a response-smuggling vector when chained behind a permissive proxy.
 
 #### Composing with json.parser
 
@@ -405,9 +413,23 @@ server.get("/events", lam{ req, params in
 })
 ```
 
-### Request body size
+### Request body size and framing
 
-The server has no built-in cap on request body size — it reads up to `Content-Length` bytes into `req.body`. This matches the philosophy of `net/http`, Flask, and Express: the stdlib stays out of policy. If you need a limit, opt in:
+The server decodes the two RFC 7230 body framings transparently before invoking the handler:
+
+- **`Content-Length: N`** -- reads exactly N bytes into `req.body`. No built-in cap; this matches the philosophy of `net/http`, Flask, and Express.
+- **`Transfer-Encoding: chunked`** -- decodes chunks (chunk extensions and trailers are accepted but discarded), capped at 64 MiB of decoded body to prevent unbounded chunked-stream DoS.
+
+Headers are capped at 64 KB regardless.
+
+Malformed or conflicting framing is rejected with a 400 response before the handler runs:
+
+- Both `Content-Length` and `Transfer-Encoding` present (request-smuggling vector).
+- Multiple `Content-Length` headers with different values, or multiple `Transfer-Encoding` headers.
+- `Content-Length` that isn't a non-negative decimal integer (no signs, no garbage suffix).
+- `Transfer-Encoding` where `chunked` isn't the final coding.
+
+If you need an explicit `Content-Length` cap on top of that, opt in:
 
 - **Application-level** — use `middleware.bodyLimit(n)` from the [middleware grain](/grains/standard/) to reject requests with `Content-Length` over `n` bytes (returns 413).
 - **DoS-grade** — put a reverse proxy (nginx, caddy) in front. A determined attacker can lie about `Content-Length` or stream forever; only the proxy can short-circuit before the body is buffered.
@@ -419,8 +441,6 @@ use "middleware"
 let app = router.create()
 app.use(middleware.bodyLimit(10_000_000))   // 10 MB cap
 ```
-
-Headers are capped at 64 KB regardless.
 
 ### Error handling
 
