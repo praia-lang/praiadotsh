@@ -84,14 +84,14 @@ use "colors"
 use "testing"
 
 testing.test("addition", lam{ in
-    testing.assertEqual(1 + 1, 2, nil)
+    testing.expectEqual(1 + 1, 2, nil)
 })
 
 // Fixtures: temp dirs auto-clean at end-of-test.
 testing.test("uses a temp dir", lam{ in
     let dir = testing.tempDir()
     fs.write(dir + "/x.txt", "hi")
-    testing.assertEqual(fs.read(dir + "/x.txt"), "hi", nil)
+    testing.expectEqual(fs.read(dir + "/x.txt"), "hi", nil)
 })
 
 // Subtests + table-driven cases.
@@ -99,7 +99,7 @@ testing.testEach("addition cases", [
     {name: "0+0", a: 0, b: 0, want: 0},
     {name: "neg", a: -1, b: 1, want: 0}
 ], lam{ t, c in
-    t.assertEqual(c.a + c.b, c.want, nil)
+    t.expectEqual(c.a + c.b, c.want, nil)
 })
 
 // Snapshots: first run writes, later runs compare.
@@ -118,7 +118,7 @@ and cleanups. `testing.cleanup(fn)` registers a per-test cleanup
 throws). `testing.skip(name, fn?)` and `testing.only(name, fn)` control
 which tests run.
 
-`testing.assertContains` works on strings (substring), arrays (element),
+`testing.expectContains` works on strings (substring), arrays (element),
 and maps (**key presence** — `{a: nil}` still contains `"a"`).
 
 Run with `praia test` to discover and execute test files.

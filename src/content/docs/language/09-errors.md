@@ -175,6 +175,20 @@ if (!content) {
 
 Writing this as `ensure (content) else { content = "{}" }` is a parse error — the else block doesn't terminate.
 
+## assert
+
+`assert(cond, msg?)` is a production assertion. It throws a `RuntimeError` when `cond` is falsy. The optional `msg` is appended to the default text:
+
+```praia
+assert(user.age >= 0)                           // throws "assertion failed"
+assert(input != nil, "input is required")       // throws "assertion failed: input is required"
+assert(arr.len() > 0, {code: "EMPTY"})          // message can be any value (toString-coerced)
+```
+
+Praia's `assert` is **always on** -- there is no compile-time strip flag (Rust's `assert!`, not `debug_assert!`). Use it for invariants whose violation should never reach production. Truthiness rules apply: only `nil` and `false` trigger the throw; `0`, `""`, and `[]` are truthy and pass cleanly.
+
+`assert` is for **errors that should crash**. For unit-test assertions that count pass/fail without throwing, use the testing grain's `expect` / `expectEqual` / `expectThrows` / `expectContains` family.
+
 ## Error stack traces
 
 When an error occurs inside nested function calls, Praia prints the full call stack:
