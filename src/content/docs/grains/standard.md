@@ -25,6 +25,8 @@ use "colors"
 | `cookie` | Parse/build single headers, `parseSet` for response attributes, `sign`/`verify` (HMAC), `encrypt`/`decrypt` (AEAD), and a `Jar` class that tracks cookies across requests |
 | `multipart` | Parser for `multipart/form-data` request bodies. `parse(req, {maxSize: N})` and a router `middleware()` form |
 | `session` | Server-side session management (in-memory store) |
+| `socket` | WebSocket server-side support — `socket.upgrade(req, handler)` upgrades an HTTP request to a WebSocket connection; the handler gets a `ws` with `.onMessage`, `.onClose`, `.send` |
+| `httpx` | HTTP session wrapper with auto-threaded cookies — composes `http.session` + `cookie.Jar`; per-request reads jar for Cookie header, feeds Set-Cookie back into the jar |
 
 ### Testing
 

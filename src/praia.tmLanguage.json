@@ -197,7 +197,7 @@
       "patterns": [
         {
           "name": "support.function.praia",
-          "match": "\\b(print|len|push|pop|type|str|num|int|fromCharCode|sort|filter|map|each|keys|values|reduce|any|all|flatMap|unique|zip|enumerate|groupBy|findIndex|flatten|loadNative)\\b"
+          "match": "\\b(print|assert|len|push|pop|type|str|num|int|fromCharCode|sort|filter|map|each|keys|values|reduce|any|all|flatMap|unique|zip|enumerate|groupBy|findIndex|flatten|loadNative)\\b"
         }
       ]
     },
@@ -205,7 +205,7 @@
       "patterns": [
         {
           "name": "support.class.praia",
-          "match": "\\b(base64|bytes|crypto|fmt|fs|http|json|math|net|path|plist|random|secrets|sqlite|sys|time|unicode|url|xml|yaml|zlib)\\b"
+          "match": "\\b(base64|bytes|crypto|fmt|fs|futures|http|json|math|net|path|plist|random|secrets|sqlite|sys|time|unicode|url|xml|yaml|zlib)\\b"
         },
         {
           "name": "support.class.praia",
