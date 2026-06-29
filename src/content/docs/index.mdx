@@ -23,7 +23,7 @@ hero:
 
 **Pipe operator.** The `|>` operator turns nested calls into readable chains. Implicit `it` parameter removes boilerplate: `data |> filter(lam{ it > 5 }) |> map(lam{ it * 2 })`. The `|?>` error pipeline catches failures inline without try/catch nesting.
 
-**Tagged values.** Data-carrying variants without declarations: `Ok(42)`, `Err("fail")`, `Point(1, 2)`. Pattern match to destructure: `match (result) { Ok(val) { ... } Err(msg) { ... } }`. A rare feature in dynamic languages.
+**Tagged values.** Data-carrying variants without declarations: `Ok(42)`, `Err("fail")`, `Point(1, 2)`. Pattern match to destructure: `match (result) { Ok(val) { ... } Err(msg) { ... } }`. A rare feature in dynamic languages. Praia warns when an undeclared tag name is close to a callable in scope (likely typo); `--strict-tags` promotes that to a hard error for production codebases.
 
 **Safe regex.** When built with Google's RE2 engine, every regex completes in O(n) guaranteed time. No catastrophic backtracking. Safe for user-supplied patterns in web servers.
 
@@ -33,7 +33,7 @@ hero:
 
 **Sane defaults.** Only `nil` and `false` are falsy. `UPPER_CASE` names warn on reassignment. `for-in` snapshots the collection so mutation mid-loop is safe.
 
-**Pattern matching.** `match` supports equality, type patterns with `is`, guard clauses with `when`, and tagged value destructuring.
+**Pattern matching.** `match` supports equality, type patterns with `is`, guard clauses with `when`, and tagged value destructuring. Use `match` as a statement *or* as an expression that returns a value — expression form requires a default `_` arm so non-exhaustive matches are a parse error.
 
 **Native C++ plugins.** Load shared libraries at runtime with `loadNative()`. Write performance-critical code in C++, expose it to Praia as regular functions. Scaffold a plugin project with `sand init --plugin`.
 

@@ -145,9 +145,9 @@ my-project/
 ├── ext_grains/              <- installed by sand
 │   └── router/
 │       ├── grain.yaml
-│       ���── main.praia
+│       └── main.praia
 ├── grains/                  <- project-bundled grains
-��   └── geometry.praia
+│   └── geometry.praia
 ├── grain.yaml               <- project manifest
 ├── sand-lock.yaml           <- lock file (auto-generated)
 └── main.praia

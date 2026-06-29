@@ -4,6 +4,17 @@ sidebar:
   order: 11
 ---
 
+## Mutation convention
+
+Collection methods follow a uniform rule across arrays, maps, and sets:
+
+- **Past-tense / noun-like names** (`sorted`, `reversed`, `union`, `intersection`, `difference`, `merge`) return a **new** collection; the receiver is untouched.
+- **Methods ending in `InPlace`** (`sortInPlace`, `reverseInPlace`, `unionInPlace`, `intersectionInPlace`, `differenceInPlace`, `mergeInPlace`) **mutate the receiver** and return nil.
+- **Imperative one-word verbs** (`push`, `pop`, `shift`, `unshift`, `add`, `remove`, `delete`, `clear`) are mutating by long-standing convention.
+- **Strings are immutable** — every string method is pure.
+
+The legacy names `.sort()` and `.reverse()` (when called on arrays) still work but emit a one-line stderr deprecation warning the first time they're hit; run with `--strict-deprecations` to promote the warning to a hard error in CI.
+
 ## Arrays
 
 Arrays are ordered, mixed-type collections with reference semantics.
@@ -49,22 +60,27 @@ print(a)            // [1, 2, 3, 4]
 | `.pop()` | Remove and return the last element |
 | `.contains(value)` | Check if value is in the array |
 | `.join(separator)` | Join elements into a string |
-| `.reverse()` | Reverse the array in place |
+| `.reversed()` | Return a reversed copy (receiver unchanged) |
+| `.reverseInPlace()` | Reverse the array in place; returns nil |
 | `.shift()` | Remove and return the first element |
 | `.unshift(val)` | Add element to the beginning |
 | `.slice(start, end?)` | Extract subarray (negative indices supported) |
 | `.indexOf(val)` | Find index of element (-1 if not found) |
 | `.find(fn)` | First element where fn returns truthy (nil if not found) |
 | `.lastIndexOf(val)` | Find last index (-1 if not found) |
-| `.sort(comparator?)` | Return sorted copy |
+| `.sorted(comparator?)` | Return sorted copy |
+| `.sortInPlace(comparator?)` | Sort the array in place; returns nil |
+| `.sort(...)`, `.reverse()` | **Deprecated** aliases — use the explicit forms above |
 
 ```praia
 let arr = [1, 2, 3]
-arr.push(4)                     // [1, 2, 3, 4]
-arr.pop()                       // returns 4
-arr.contains(2)                 // true
-["a", "b", "c"].join(", ")     // "a, b, c"
-arr.reverse()                   // [3, 2, 1]
+arr.push(4)                       // [1, 2, 3, 4]
+arr.pop()                         // returns 4
+arr.contains(2)                   // true
+["a", "b", "c"].join(", ")        // "a, b, c"
+let r = [1, 2, 3].reversed()      // [3, 2, 1], original unchanged
+let s = [3, 1, 2].sorted()        // [1, 2, 3]
+[3, 1, 2].sortInPlace()           // mutates receiver
 ```
 
 ### Functional operations
@@ -159,6 +175,7 @@ print(a)            // {x: 1, y: 2}
 | `.get(key, default?)` | Returns value or default (nil if omitted) |
 | `.delete(key)` | Removes key, returns `true` if it existed |
 | `.merge(other)` | Returns new map with other's values taking priority |
+| `.mergeInPlace(other)` | Merge other's entries into receiver in place; returns nil |
 | `.entries()` | Returns `[[key, value], ...]` array |
 | `.clear()` | Remove all entries |
 
@@ -187,6 +204,8 @@ config |> values |> print        // ["localhost", 8080]
 ## Sets
 
 Sets hold an unordered collection of unique values. Elements must be hashable: `nil`, bool, int, float, string, or tagged values — the same rules as map keys. Arrays, maps, instances, and other sets aren't hashable and can't be elements.
+
+> Looking for `collections.Set`? It still exists as a deprecated wrapper around native sets — see the [collections grain notes](/grains/standard/). Prefer the `#{}` literal and the methods documented below for new code.
 
 ```praia
 let primes = #{2, 3, 5, 7, 11}
@@ -240,6 +259,9 @@ let a = #{1, 2, 3}
 | `.union(other)` | New set with every element of `self` or `other`. |
 | `.intersection(other)` | New set with elements in both. |
 | `.difference(other)` | New set with elements in `self` but not in `other`. |
+| `.unionInPlace(other)` | Add every element of `other` to the receiver in place; returns nil. |
+| `.intersectionInPlace(other)` | Drop elements of the receiver not present in `other` in place; returns nil. |
+| `.differenceInPlace(other)` | Drop elements of the receiver also in `other` in place; returns nil. |
 | `.isSubset(other)` | `true` if every element of `self` is in `other` (empty set is a subset of everything). |
 
 ```praia

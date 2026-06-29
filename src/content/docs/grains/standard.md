@@ -59,11 +59,10 @@ use "colors"
 | Grain | Description |
 |-------|-------------|
 | `strings` | Extended string utilities |
-| `collections` | `Stack`, `Queue`, `Deque`, `Set`, `OrderedMap`, `Counter`, `DefaultDict` — each header has Big-O notes |
+| `collections` | `Stack`, `Queue`, `Deque`, `OrderedMap`, `Counter`, `DefaultDict` — each header has Big-O notes. `Set` is **deprecated** (now a thin wrapper around the native `#{}` set; emits a warning on construction). Use `#{}` and its built-in methods (`.union`, `.intersection`, `.difference`, `.unionInPlace`, …) instead; run with `--strict-deprecations` to hard-fail any remaining `collections.Set()` calls. |
 | `heap` | Binary min-heap (priority queue) on plain arrays: `push`, `pop`, `peek`, `heapify`, `pushPop`, `replace`. Optional `keyFn` for priority-queue use |
 | `bisect` | Binary search on sorted arrays: `left`, `right`, `insort`, `contains`. Mirrors Python's `bisect` module |
 | `statistics` | Numeric descriptive stats: `mean`, `median` (+ `medianLow`/`High`), `mode`, `multimode`, `variance`/`pvariance`, `stdev`/`pstdev`, `range`, `quantiles`, `covariance`, `correlation` |
-| `math` | Extended math functions |
 | `geometry` | Geometry helpers |
 | `datetime` | Date and time utilities |
 | `timers` | Timer utilities |

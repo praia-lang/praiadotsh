@@ -75,7 +75,7 @@ try {
 ```praia
 func processFile(path) {
     let db = sqlite.open("app.db")
-    defer db.close()
+    defer sqlite.close(db)
 
     let sock = net.connect("host", 80)
     defer net.close(sock)
@@ -84,6 +84,8 @@ func processFile(path) {
 ```
 
 Defers run even on exceptions. If a defer throws, other defers still run.
+
+`defer` also works at the **top level of a script** — useful for closing sqlite handles, flushing logs, or restoring terminal state before the program exits. Top-level defers fire when the script finishes (normal completion, uncaught throw, or `sys.exit()`). Note the REPL is the one exception: defers entered at the prompt are silently dropped because there is no defined script end.
 
 ## ensure
 

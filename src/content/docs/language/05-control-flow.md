@@ -96,6 +96,36 @@ match (x) {
 
 If no case matches and there is no default, nothing happens.
 
+### Match as an expression
+
+`match` is also an **expression** — it produces a value. The value of each arm is the trailing expression of its body block; intervening statements run for their side effects and only the last expression yields the arm's value. This rule applies whether the arm body is one line or many — unlike `lam`, where a single-expression body auto-returns but a multi-statement body needs an explicit `return`. Use the expression form anywhere an expression is expected: a `let` initializer, a `return` value, a function argument, a pipe stage.
+
+```praia
+let label = match (result) {
+    Ok(v)  { "got " + str(v) }
+    Err(e) { "failed: " + e }
+    _      { "unknown" }
+}
+```
+
+Multi-statement arm bodies are fine — only the trailing expression is the value:
+
+```praia
+let r = match (Ok(5)) {
+    Ok(v) {
+        log(v)         // runs for its side effect
+        v * 2          // ← this is the arm's value
+    }
+    _ { -1 }
+}
+```
+
+When used as an expression, `match` **must** declare a default `_` arm. A non-exhaustive match expression is a parse error — there's no value to produce if no arm matches. The statement form (no surrounding value context) keeps its silent-fallthrough behavior unchanged, so existing code is unaffected.
+
+```praia
+let r = match (1) { 1 { "a" } 2 { "b" } }   // parse error: missing '_'
+```
+
 ## while
 
 ```praia

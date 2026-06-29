@@ -19,7 +19,7 @@ at runtime; use them with the `is` operator (`x is "int"`, `x is MyClass`).
 | `set`       | `#{1, 2, 3}`                        | Unordered collection of unique values. Reference semantics. Elements must be hashable (same rules as map keys). Literal syntax `#{...}` distinguishes from map `{...}`; empty set is `#{}`. |
 | `function`  | `func add(a, b) { ... }`            | First-class, supports closures. Includes user `func` / `lam` and built-in natives. |
 | `instance`  | `MyClass(...)`                      | Instance of a user-defined `class`. Use `x is MyClass` to check class identity (walks the `extends` chain). |
-| `tagged`    | `Ok(42)`, `Err("nope")`             | Tagged values from a `CapitalizedName(args...)` constructor call. Used for sum types and result-like patterns; see `match`. |
+| `tagged`    | `Ok(42)`, `Err("nope")`             | Tagged values from a `CapitalizedName(args...)` constructor call on an undefined identifier. Used for sum types and result-like patterns; see `match`. Praia warns when an undeclared tag name is close to a global callable (likely typo); pass `--strict-tags` to promote that fallback to a `RuntimeError` for any undeclared tag. |
 | `future`    | `async f()`                         | Handle for an in-flight async task. `await` blocks for the result. |
 | `generator` | `g()` where `g` contains `yield`    | Iterator produced by a generator function. Use `.next()` or iterate with `for x in g`. |
 
