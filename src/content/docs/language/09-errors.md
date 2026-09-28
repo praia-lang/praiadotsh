@@ -34,38 +34,79 @@ try {
 
 ## throw
 
-Throw any value as an error. If not caught, the program terminates.
+Throw any value as an error. Praia ships a builtin `Error` class hierarchy — `Error` base plus typed subclasses (`TypeError`, `ValueError`, `IndexError`, `KeyError`, `NameError`, `AssertionError`, `IOError`, `NetworkError`, `HTTPError`, `TimeoutError`, `ParseError`) — so user code and the engine can surface structured errors instead of bare strings. If not caught by `try/catch`, the program terminates.
 
 ```praia
-func divide(a, b) {
-    if (b == 0) {
-        throw "division by zero"
-    }
-    return a / b
-}
-
 try {
-    print(divide(10, 0))
-} catch (err) {
-    print("error:", err)     // error: division by zero
+    throw IOError("no such file", "/etc/config", 2)
+} catch (e) {
+    match (e) {
+        is HTTPError    { print("http: " + str(e.status)) }
+        is IOError      { print("io: " + e.message + " (errno=" + str(e.errno) + ")") }
+        is TypeError    { print("type: " + e.message) }
+        _               { print("other: " + str(e)) }
+    }
 }
 ```
 
-You can throw any value -- strings, numbers, maps:
+**User throws are unchanged** — strings, maps, and tagged values still arrive at `catch (err)` verbatim.
 
 ```praia
-throw {code: 404, message: "not found"}
+throw "boom"                                // catch (err) → err == "boom"
+throw {code: 404, message: "not found"}     // catch (err) → err.code
 ```
 
-Runtime errors (type errors, index out of bounds, etc.) are also caught:
+**Engine runtime errors** (type errors, index out of bounds, division by zero, IO failures, …) arrive as `Error` instances. Reach the message via `.message` or `str(err)`:
 
 ```praia
 try {
     let arr = [1, 2, 3]
     print(arr[99])
-} catch (err) {
-    print(err)              // Array index out of bounds
+} catch (e) {
+    print(e is Error)  // true
+    print(str(e))      // "Error: Array index out of bounds"
+    print(e.message)   // "Array index out of bounds"
 }
+```
+
+`Error` provides string-forwarding shims — `.contains(sub)`, `.startsWith(prefix)`, `.endsWith(suffix)` — that delegate to the stringified form, so `err.contains("Division")` keeps working. Concat with `str(err) + "…"` — `+` is deliberately not overloaded on `Error`.
+
+### Builtin Error subclasses
+
+| Class | Extends | Fields | Purpose |
+|---|---|---|---|
+| `Error` | — | `.message`, `.type`, `.line`, `.column` | Base — `is Error` catches every builtin type. |
+| `TypeError` | `Error` | | Wrong type in an operation. |
+| `ValueError` | `Error` | | Right type, invalid value. |
+| `NameError` | `Error` | | Undefined variable / property / method. |
+| `IndexError` | `Error` | `.index` | Out-of-bounds array/string access. |
+| `KeyError` | `Error` | `.key` | Missing map key. |
+| `AssertionError` | `Error` | | Assertion failure (`assert`, `testing.expect`). |
+| `IOError` | `Error` | `.path`, `.errno` | Filesystem, subprocess, generic OS. |
+| `NetworkError` | `IOError` | `.host`, `.port`, `.errno` | TCP/UDP/DNS. |
+| `HTTPError` | `IOError` | `.status`, `.url`, `.body` | HTTP-level failures. |
+| `TimeoutError` | `IOError` | | Any wait timeout. |
+| `ParseError` | `Error` | `.line`, `.column`, `.source` | Parse failures. |
+
+Each takes a message plus optional per-class fields as positional args (with `nil` defaults):
+
+```praia
+throw IOError("no such file", "/etc/config", 2)
+throw HTTPError("bad gateway", 502, "http://api/x", "upstream error")
+```
+
+### Subclassing in user code
+
+```praia
+class ConfigError extends ValueError {
+    func init(message, path) {
+        super.init(message)
+        this.type = "ConfigError"
+        this.path = path
+    }
+}
+throw ConfigError("bad json", "/etc/x")
+// `is ConfigError`, `is ValueError`, `is Error` all match in a catch.
 ```
 
 ## defer
