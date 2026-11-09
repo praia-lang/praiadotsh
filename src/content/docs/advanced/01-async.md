@@ -67,13 +67,14 @@ try {
 - `async funcCall(args)` evaluates the function and arguments on the current thread, then spawns the call in a new OS thread
 - Returns a **future** immediately
 - `await future` blocks until the background thread finishes
-- Each async Praia function gets its own VM with a **deep copy** of globals, captured upvalues, and arguments — tasks are fully isolated, no shared mutable state, no data races
+- Each async Praia function gets its own VM with a **deep copy** of its arguments, the variables it captured, and the globals it can reach (the bytecode VM copies only the globals the task's code can reach; `--tree` copies them all). One exception: a closure passed *into* the task still shares the variables it captured with the code that created it on the bytecode VM, so don't change that captured state from both sides — pass the data as an argument or use `SharedMap`/`Queue` instead
 - Native functions (`http.get`, `sys.exec`, etc.) also run in true parallel
+- When an async native calls back into Praia — the request handler of `async server.listen(port)`, an `http.sse` callback — those calls run inside the task as well. On the bytecode VM they run against the task's copy of the globals, so they never touch the caller's state mid-flight; in tree-walker mode (`--tree`) they resolve globals through the caller's environment instead. On both engines, a handler the native was given earlier still shares the variables it captured with the code that created it
 - A bare `async fn()` (no `let f =`) is fire-and-forget — it returns immediately and the task runs to completion in the background
 
 ## Sharing state across async tasks
 
-Because globals/upvalues/arguments are deep-copied, **you cannot share a Praia map, array, or class instance between an async task and its caller** — each side has its own independent copy. This is the price of "no data races" in user code.
+Because globals, captured variables and arguments are deep-copied, **you cannot share a Praia map, array, or class instance between an async task and its caller** — each side has its own independent copy. The exceptions: a `Queue` (or `SharedMap`) hands the receiver the same map or array the sender put in, not a copy; the closures noted above keep sharing what they captured; and in `--tree` mode, async-native callbacks resolve globals through the caller's environment and so can share its mutable globals even without a shared closure.
 
 ```praia
 let m = {}
@@ -86,7 +87,7 @@ print(m)              // {} — the task mutated its own copy of `m`
 To communicate, use one of the following:
 
 - **`SharedMap`** — cross-task key-value store. Use this when async tasks need to read or write shared state by key (progress trackers, job state, caches). See below.
-- **`Queue`** — built for cross-task messaging (the queue itself isn't deep-copied; only the values you send through it are messages, not shared state).
+- **`Queue`** — built for cross-task messaging. Neither the queue nor the values you send through it are deep-copied: the receiver gets the same map or array the sender sent, so hand it over and stop changing it on the sending side.
 - **`CancellationToken`** — cooperative cancel signal. The caller flips the flag; long-running tasks poll and bail. See below.
 - **External resources** — files, SQLite, sockets, native plugin state. These live outside the Praia heap, so all tasks see the same underlying resource. Use `Lock()` to coordinate concurrent access (see below).
 - **`await`** — collect results back from the task. The future's return value is moved across the boundary.

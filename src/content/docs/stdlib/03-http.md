@@ -64,9 +64,11 @@ Header names are lowercased for consistent access.
 | `timeout` | -- | Shorthand: same value applied to connect, read, AND total. Seconds (float ok) |
 | `connectTimeout` | 30 | TCP/TLS handshake budget, in seconds |
 | `readTimeout` | 30 | Per `recv()` / `SSL_read()` budget, in seconds |
-| `totalTimeout` | none | Overall request budget including redirects, in seconds |
+| `totalTimeout` | 300 | Overall request budget in seconds: connect, every redirect hop, and reading the whole response. `0` or less = no overall cap |
 | `followRedirects` | `true` | Follow 3xx responses with Location headers |
 | `maxRedirects` | 10 | Throw if a chain exceeds this |
+| `maxResponseSize` | 100 MiB | Largest response body a buffered request reads, in bytes; a bigger one throws instead of filling memory. A declared `Content-Length` over it fails before the body is read. `0` or less = no limit. Streams (`http.openStream`) aren't limited -- they hand the body over incrementally. |
+| `redirectHeaders` | `"safe"` | Headers sent after a redirect to another origin (scheme, host or port). `"safe"` forwards only these standard non-credential headers: `Accept`, `Accept-Encoding`, `Accept-Language`, `User-Agent`, `Content-Type`, `Content-Length`, `Content-Encoding`, `Content-Language`, `Cache-Control`, `Pragma`, `Range`, `If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since`, `If-Range`; `Authorization`, `Cookie` and custom headers such as `X-API-Key` are dropped. `"all"` forwards every header, and lets a 307/308 resend the request body to the new origin (which `"safe"` refuses) -- only for redirects you trust (like `curl --location-trusted`). |
 | `insecure` | `false` | **Skip TLS certificate verification.** Testing/dev only; equivalent to `curl -k` |
 | `caBundle` | system trust store | Path to a custom CA PEM bundle |
 | `blockPrivateHosts` | `true` | **SSRF protection.** Refuse to connect to loopback, RFC1918, link-local (incl. cloud metadata `169.254.169.254`), IPv4-mapped, multicast, and reserved address ranges. Re-applied per redirect hop. Set to `false` only when you are deliberately targeting internal hosts (local dev, internal microservices). |
@@ -94,7 +96,7 @@ let r = http.request({url: "https://internal.corp/", caBundle: "/etc/ssl/corp-ro
 let r = http.get("http://127.0.0.1:8080/health", {blockPrivateHosts: false})
 ```
 
-The shorthand methods accept the same options map as an optional trailing argument: `http.get(url, opts)`, `http.get(session, url, opts)`, and the equivalent shapes for `http.post`. `http.request` always takes a map.
+`http.get` accepts the same options map as an optional trailing argument: `http.get(url, opts)` and `http.get(session, url, opts)`. `http.post(url, body|map)` and `http.post(session, url, body|map)` take either a body string or a map of `body`, `headers` and `redirectHeaders`; use `http.request` for the other options. `http.request` always takes a map.
 
 ### Redirects
 
@@ -104,7 +106,11 @@ The client follows 3xx with Location by default, up to `maxRedirects` hops.
 - **301 / 302**: switches POST (or any non-GET/HEAD method) to GET and drops the body. Matches every browser/HTTP-library convention since the 1990s.
 - **307 / 308**: preserves both method AND body. These codes exist to disambiguate from the 301/302 method-switch behavior.
 
-**Security**: an `https://` → `http://` Location is refused outright. Relative-path Locations like `?foo=bar` aren't supported; absolute paths (`/foo`) and protocol-relative (`//host/foo`) URLs are.
+**Security**: an `https://` → `http://` Location is refused outright, so an open redirect can't move the request onto plaintext.
+
+Every Location form RFC 3986 allows is followed: absolute URLs (`https://other/path`), protocol-relative (`//host/foo`), absolute paths (`/foo`), relative paths (`final`, `../login`, `./sibling`), and query-only references (`?q=1`, which keeps the base path).
+
+Redirects to a different origin (scheme, host or port) only carry standard non-credential headers, so an open redirect can't collect `Authorization`, `Cookie`, or a custom header like `X-API-Key`. Same-origin redirects keep every header. A 307 or 308 to a different origin, which would resend the request body, is refused with an error. Pass `redirectHeaders: "all"` to forward every header and the body when you trust the redirect target.
 
 When `followRedirects` is `false`, the 3xx response is returned as-is with `Location` in `headers.location`.
 
@@ -112,7 +118,7 @@ When `followRedirects` is `false`, the 3xx response is returned as-is with `Loca
 
 - **`connectTimeout`** uses non-blocking connect + poll, so a slow handshake doesn't stall the calling task.
 - **`readTimeout`** is enforced via `SO_RCVTIMEO`/`SO_SNDTIMEO`; each individual recv/send can wait at most this long.
-- **`totalTimeout`** bounds the entire request including all redirect hops. Per-request timeouts are capped at the remaining budget when this kicks in.
+- **`totalTimeout`** bounds the entire request: every redirect hop, each address tried while connecting, the TLS handshake, sending the request and every read of the response, so a server that trickles its body a byte at a time can't outlast it. (DNS lookup isn't covered.) Exceeding it throws "HTTP total timeout exceeded". For `http.openStream` it only caps connecting, the TLS handshake and each individual read (at the time left when each redirect hop starts); it isn't an overall limit on getting the headers, and reading the stream afterwards uses `readTimeout` per read.
 
 Connect failures throw "connect timed out after Nms"; read failures throw "HTTP read timed out".
 
@@ -159,7 +165,7 @@ http.request(s, {
 // User-Agent is inherited from the session.
 ```
 
-The `session(opts?)` options shape mirrors `http.request`'s — `headers`, `timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts` — minus `method`/`url`/`body`, which only make sense per-call.
+The `session(opts?)` options shape mirrors `http.request`'s — `headers`, `timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts`, `redirectHeaders`, `maxResponseSize` — minus `method`/`url`/`body`, which only make sense per-call.
 
 #### Connection reuse and stale-conn recovery
 
@@ -198,7 +204,7 @@ let stream = http.openStream(s, {url: "https://example.com/big.json"})
 
 #### Not in this session yet
 
-- **No cookie jar on `http.session`.** Use the [`httpx` grain](#cookie-aware-sessions----httpx) for auto-threaded cookies (`httpx.Session.stream` covers the streaming path too), or pair `http.session` with the `cookie` grain's `Jar` class manually. The session response's `cookies` array still surfaces incoming `Set-Cookie` headers either way.
+- **No cookie jar on `http.session`.** Use the [`httpx` grain](#cookie-aware-sessions--httpx) for auto-threaded cookies (`httpx.Session.stream` covers the streaming path too), or pair `http.session` with the `cookie` grain's `Jar` class manually. The session response's `cookies` array still surfaces incoming `Set-Cookie` headers either way.
 - **No pool-of-streams.** `http.openStream(session, opts)` opens fresh every time.
 
 ### Cookie-aware sessions — `httpx`
@@ -234,7 +240,7 @@ Methods mirror the underlying `http.*` surface:
 | `s.jar()` | The underlying `cookie.Jar` — mutable; `.clear()` to drop all cookies |
 | `s.close()` | Closes the underlying `http.session`. Idempotent. |
 
-The options map mirrors `http.session`'s shape (`timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts`, `headers`) plus one extra key:
+The options map mirrors `http.session`'s shape (`timeout`, `connectTimeout`, `readTimeout`, `totalTimeout`, `followRedirects`, `maxRedirects`, `insecure`, `caBundle`, `blockPrivateHosts`, `redirectHeaders`, `maxResponseSize`, `headers`) plus one extra key:
 
 - **`jar`** — if provided, the session uses this `cookie.Jar` instance instead of creating an empty one. Useful for resuming cookie state across runs, or sharing one jar across multiple sessions.
 
@@ -331,6 +337,22 @@ let server = http.createServer(lam{ req in
 server.listen(8080)
 ```
 
+### Listen options
+
+`server.listen(port, opts?)` takes an optional map:
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `host` | all IPv4 interfaces (`0.0.0.0`) | Address or host name to bind. A host name binds only the first of its addresses that works, so `"localhost"` may end up IPv6-only (`::1`) or IPv4-only. For a server only this machine can reach, use `"127.0.0.1"` or `"::1"`. |
+| `maxBodySize` | 64 MiB | Largest request body accepted, in bytes, for both `Content-Length` and chunked bodies; larger requests get `413 Payload Too Large`. A `Content-Length` over the limit is refused before any of the body is read; a chunked body is read and decoded until its decoded size passes the limit. |
+| `requestTimeout` | 30 | Seconds allowed for receiving one request, headers and body together. A client that's slower than this is disconnected. It also caps how long a single blocked write of the response waits for a client that has stopped reading. |
+
+```praia
+server.listen(8080, {host: "127.0.0.1", maxBodySize: 1_000_000, requestTimeout: 10})
+```
+
+The server handles one connection at a time, so `requestTimeout` is also how long one slow or idle client can hold it up. For a public server, put a reverse proxy (nginx, caddy) in front.
+
 ### Request object
 
 | Field | Description |
@@ -399,7 +421,7 @@ Symlinks pointing outside the jail are blocked too (a symlink in `uploads/` that
 
 ### Server-Sent Events (SSE)
 
-`http.sse(req, callback)` keeps the connection open for real-time streaming:
+`http.sse(req, callback, opts?)` keeps the connection open for real-time streaming:
 
 ```praia
 server.get("/events", lam{ req, params in
@@ -413,12 +435,20 @@ server.get("/events", lam{ req, params in
 })
 ```
 
+The response has no CORS header. A stream meant to be read from other origins (with `EventSource`) adds one through the options map, which takes any extra response headers:
+
+```praia
+return http.sse(req, callback, {headers: {"Access-Control-Allow-Origin": "https://app.example"}})
+```
+
 ### Request body size and framing
 
 The server decodes the two RFC 7230 body framings transparently before invoking the handler:
 
-- **`Content-Length: N`** -- reads exactly N bytes into `req.body`. No built-in cap; this matches the philosophy of `net/http`, Flask, and Express.
-- **`Transfer-Encoding: chunked`** -- decodes chunks (chunk extensions and trailers are accepted but discarded), capped at 64 MiB of decoded body to prevent unbounded chunked-stream DoS.
+- **`Content-Length: N`** -- reads exactly N bytes into `req.body`. A request declaring more than `maxBodySize` (default 64 MiB) gets 413 before any of the body is read.
+- **`Transfer-Encoding: chunked`** -- decodes chunks (chunk extensions and trailers are accepted but discarded), up to `maxBodySize` of decoded body; past that, 413.
+
+The whole request has to arrive within `requestTimeout` (default 30 seconds).
 
 Headers are capped at 64 KB regardless.
 
@@ -428,8 +458,9 @@ Malformed or conflicting framing is rejected with a 400 response before the hand
 - Multiple `Content-Length` headers with different values, or multiple `Transfer-Encoding` headers.
 - `Content-Length` that isn't a non-negative decimal integer (no signs, no garbage suffix).
 - `Transfer-Encoding` where `chunked` isn't the final coding.
+- A header line with whitespace before its colon, or with no name (RFC 7230 §3.2.4).
 
-If you need an explicit `Content-Length` cap on top of that, opt in:
+For a tighter limit on particular routes, or protection beyond what one process can give:
 
 - **Application-level** — use `middleware.bodyLimit(n)` from the [middleware grain](/grains/standard/) to reject requests with `Content-Length` over `n` bytes (returns 413).
 - **DoS-grade** — put a reverse proxy (nginx, caddy) in front. A determined attacker can lie about `Content-Length` or stream forever; only the proxy can short-circuit before the body is buffered.
@@ -444,7 +475,7 @@ app.use(middleware.bodyLimit(10_000_000))   // 10 MB cap
 
 ### Error handling
 
-If the handler throws an error, the server returns a 500 response and continues running.
+If the handler throws an error, the server returns a generic `500 Internal Server Error` and continues running. The error itself goes to the server's stderr (`[http] handler error: ...`), not to the client, since its text can include file paths, SQL, or other internals.
 
 ### Graceful shutdown
 
@@ -452,8 +483,9 @@ The server handles `SIGINT` (Ctrl-C) and `SIGTERM` gracefully. Code after `liste
 
 ```praia
 server.listen(8080)
+// Runs after Ctrl-C or SIGTERM:
 print("Shutting down...")
-db.close()
+sqlite.close(db)
 ```
 
 ## URL encoding
@@ -512,11 +544,12 @@ url.build({
     fragment: "section-1"
 })
 // "https://api.example.com:8443/v1/items?limit=50&tag=blue#section-1"
+// (parameters from a map can come out in either order)
 ```
 
 - IPv6 hosts are auto-bracketed.
 - Default ports (`80` for `http`, `443` for `https`) are dropped.
-- `query` can be a string (verbatim) or a map (run through `buildQuery`).
+- `query` can be a string (verbatim) or a map (run through `buildQuery`). A map's parameters follow its iteration order, not the order you wrote them; pass a string when the order matters.
 - Without `scheme`/`host`, you get a relative URL (`/items?limit=10`).
 - Opaque URIs like `mailto:ada@example.com` work with `{scheme: "mailto", path: "ada@example.com"}`.
 
@@ -531,7 +564,7 @@ url.build({
 
 ```praia
 url.buildQuery({a: 1, b: "hello world", c: true})
-// "a=1&b=hello%20world&c=true"
+// "a=1&b=hello%20world&c=true"   (map order isn't guaranteed)
 
 url.buildQuery({tags: ["red", "blue"]})
 // "tags=red&tags=blue"

@@ -32,6 +32,8 @@ try {
 }
 ```
 
+`finally` also runs when `return`, `break`, or `continue` leaves the `try` or `catch` block early. Nested `finally` blocks run innermost first.
+
 ## throw
 
 Throw any value as an error. Praia ships a builtin `Error` class hierarchy — `Error` base plus typed subclasses (`TypeError`, `ValueError`, `IndexError`, `KeyError`, `NameError`, `AssertionError`, `IOError`, `NetworkError`, `HTTPError`, `TimeoutError`, `ParseError`) — so user code and the engine can surface structured errors instead of bare strings. If not caught by `try/catch`, the program terminates.
@@ -127,6 +129,8 @@ func processFile(path) {
 Defers run even on exceptions. If a defer throws, other defers still run.
 
 `defer` also works at the **top level of a script** — useful for closing sqlite handles, flushing logs, or restoring terminal state before the program exits. Top-level defers fire when the script finishes (normal completion, uncaught throw, or `sys.exit()`). Note the REPL is the one exception: defers entered at the prompt are silently dropped because there is no defined script end.
+
+At the top level of a grain, defers fire when the grain finishes loading (after its last statement or `export`, or when it throws), before the importing code continues.
 
 ## ensure
 

@@ -151,6 +151,16 @@ for (i in 1..n + 1) {
 }
 ```
 
+Both bounds are evaluated once, before the first iteration. They must be numbers; non-integer bounds are truncated toward zero, so `0..2.5` gives `0, 1`.
+
+Each iteration gets its own `i`: a closure created in the loop keeps that iteration's value, and assigning to `i` inside the body doesn't change which values come next.
+
+```praia
+let fs = []
+for (i in 0..3) { fs.push(lam{ in i }) }
+print(map(fs, lam{ f in f() }))   // [0, 1, 2]
+```
+
 ## for-in (arrays)
 
 ```praia

@@ -89,8 +89,8 @@ CLI wrappers from a grain's [`bin:` section](#cli-grains-the-bin-section) land i
 
 Praia resolves a `use "<name>"` import in this order:
 
-1. `ext_grains/` (walks up from the importing file, then `<cwd>/ext_grains/`)
-2. `grains/` (walks up from the importing file, then `<cwd>/grains/`)
+1. `ext_grains/` (walks up from the importing file; `<cwd>/ext_grains/` only when there is no file, as in the REPL)
+2. `grains/` (walks up from the importing file; `<cwd>/grains/` only when there is no file, as in the REPL)
 3. `~/.praia/ext_grains/` (user-global)
 4. `<libdir>/ext_grains/` (system-global — same dir sand installs to with `sudo`)
 5. `<libdir>/grains/` (bundled standard library)

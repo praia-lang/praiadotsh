@@ -278,7 +278,9 @@ A Value that prints as `<external:typeName>`, passes through assignments / funct
 
 ## GC roots: stashing Values across native calls
 
-If your plugin stashes a Praia `Value` in C++ static / global storage that outlives the native function call -- a callback table, a cache, a singleton -- you **must** pin it as a GC root. Otherwise the next garbage collection treats the value as unreachable and the sweep hollows out the underlying object's internal references. The `shared_ptr` you held stays valid, but the object is empty: a stashed `Callable` finds an empty closure environment, a cached `PraiaMap` finds its entries cleared.
+> **Current engines don't require pinning for safety.** The collector compares each object's `shared_ptr` count with the references it can see from other heap objects. Anything held from outside the heap -- a C++ local, a static cache, a `std::function` capture, a `PraiaExternal`'s data -- is treated as a root and never swept. Pinning still works and is still the right call for plugins that must also load into older engines, which swept such values; the rules below describe those engines. One cost remains on current engines: a cycle that passes through a Value held in C++ can't be collected until the C++ side lets go.
+
+**On older engines**, if your plugin stashes a Praia `Value` in C++ static / global storage that outlives the native function call -- a callback table, a cache, a singleton -- you **must** pin it as a GC root. Otherwise the next garbage collection treats the value as unreachable and the sweep hollows out the underlying object's internal references. The `shared_ptr` you held stays valid, but the object is empty: a stashed `Callable` finds an empty closure environment, a cached `PraiaMap` finds its entries cleared.
 
 `praia::pinValue` registers the value with the current thread's `GcHeap` so the mark phase visits it on every collection. Reference-counted by multiplicity: pin N times means N unpins to release. The matching uses last-in-first-out, so nested RAII pin/unpin pairs work without bookkeeping.
 
@@ -319,14 +321,16 @@ extern "C" void praia_register(PraiaMap* module) {
 
 ### When you need this
 
-| Storage shape | Pin needed? |
+On current engines, no row needs a pin for safety: every shape below is a value held outside the heap, which the collector treats as a root. The table describes older engines, for plugins that must support them.
+
+| Storage shape | Pin needed on older engines? |
 |---|---|
 | Local `Value` / `Value` argument in a non-reentrant native call | No. The C++ stack frame keeps the `shared_ptr` alive, and nothing else runs between native entry and return to trigger a sweep. |
 | Local `Value` / argument across a `praia::call` callback, async yield, or any other reentrant path | **Yes.** Re-entering the interpreter can run a GC sweep on this thread; the C++ stack pins the `shared_ptr` but the sweep can still clear the object's *internal* references. |
 | `Value` stashed in C++ static / global between calls | **Yes.** |
 | `Value` inside a `PraiaExternal`'s opaque data | **Yes, if the stored Value is GC-tracked.** The external itself is GC-tracked, but its `data` field is just `void*` -- the GC doesn't know to walk inside. Pin any Praia Values you store there. |
 
-The rule in one sentence: **a local `Value` is safe without a pin only while no Praia code can run on this thread**. The moment you call back into the interpreter -- directly via `praia::call`, indirectly via anything that allocates Praia objects, or across an async yield -- a sweep can fire and the value's internals are exposed.
+The rule in one sentence, for older engines: **a local `Value` is safe without a pin only while no Praia code can run on this thread**. The moment you call back into the interpreter -- directly via `praia::call`, indirectly via anything that allocates Praia objects, or across an async yield -- a sweep can fire and the value's internals are exposed.
 
 ### When you don't
 
@@ -661,7 +665,7 @@ let body = await myplugin.fetch("https://example.com")
 
 **`reject` round-trips your message.** Praia's `await` rethrows `RuntimeError` unchanged, so a `promise.reject("io error: timeout")` becomes a catchable RuntimeError carrying `"io error: timeout"` verbatim -- no wrapping prefix.
 
-**GC contract for `resolve(Value)`.** Praia's Future is not traced by the GC; a Value sitting between `resolve` and `await` is invisible to the collector. For **non-GC values** (numbers, strings, bools, nil) this doesn't matter -- they have no interior the sweep could hollow. Most plugins resolve with these and never hit the rest of this paragraph. For **GC-tracked values** (Map, Array, Instance, Callable) the plugin must keep the value pinned via `praia::pinValue` while it's in transit between resolve and await. The canonical pattern is the same pin-on-engine / unpin-on-engine wrapper `postToEngine` plugins use (see `examples/plugins/counter.cpp::scheduleAsync` for a worked example); the `resolve` from the worker then operates on a pre-pinned value, and a small unpin wrapper posted back to the engine releases the pin after the await consumes it.
+**GC contract for `resolve(Value)`.** On current engines a resolved Value is safe while it waits for `await`: the Future holds it from outside the heap, so the collector treats it as a root. The rest of this paragraph applies to older engines. There, Praia's Future is not traced by the GC; a Value sitting between `resolve` and `await` is invisible to the collector. For **non-GC values** (numbers, strings, bools, nil) this doesn't matter -- they have no interior the sweep could hollow. Most plugins resolve with these and never hit the rest of this paragraph. For **GC-tracked values** (Map, Array, Instance, Callable) the plugin must keep the value pinned via `praia::pinValue` while it's in transit between resolve and await. The canonical pattern is the same pin-on-engine / unpin-on-engine wrapper `postToEngine` plugins use (see `examples/plugins/counter.cpp::scheduleAsync` for a worked example); the `resolve` from the worker then operates on a pre-pinned value, and a small unpin wrapper posted back to the engine releases the pin after the await consumes it.
 
 ### Process-exit cleanup -- `praia_at_exit`
 
@@ -810,5 +814,5 @@ If a download fails (HTTP error) or the sha256 doesn't match the recorded integr
 Plugin code can be called from one of three contexts. Pick the one that matches what your plugin does:
 
 - **Synchronous calls.** Most plugins. Praia invokes your native function on its own thread; `gcNew` works as expected, `praia::call` works for callbacks, the GC sees your containers normally.
-- **Inside an `async` task.** Praia ships your function to a worker thread for the task's lifetime, with the GC disabled while the task runs. You can still use `gcNew` for short-lived intermediate containers, but **don't let a `gcNew`-built object escape the task scope** -- it isn't tracked by the parent's GC. Either return primitives, deep-copy outside the plugin, or marshal the work back to the parent. See the [async/Lock guide](/docs/advanced/async) for the matching pattern on the Praia side.
+- **Inside an `async` task.** Praia ships your function to a worker thread for the task's lifetime. `gcNew` works as usual there: the objects you build are tracked by that thread, and when the task ends they move to the garbage collector of the thread that started it -- the value you return included. What you must not do is hand a `gcNew`-built object to another thread while the task is still running, except through `Queue` or `SharedMap`. See the [async/Lock guide](/docs/advanced/async) for the matching pattern on the Praia side.
 - **Off-engine threads (e.g. libuv callback, your own `std::thread`).** Both `gcNew` and `praia::call` are unsafe. Marshal back to a Praia-driven thread before touching either.

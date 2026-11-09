@@ -26,11 +26,11 @@ for (user in users) {
 }
 ```
 
-INTEGER columns are returned as Praia ints, preserving the full 64-bit range; REAL as floats; TEXT as strings; NULL as `nil`.
+INTEGER columns are returned as Praia ints, preserving the full 64-bit range; REAL as floats; TEXT as strings; NULL as `nil`. TEXT and BLOB values come back as strings of their full byte length, so binary data and text containing NUL bytes round-trip (and bound string parameters are stored whole, NUL bytes included).
 
 ## Executing statements
 
-`sqlite.run(db, sql, params?)` executes INSERT/UPDATE/DELETE/DDL and returns `{changes, lastId}`:
+`sqlite.run(db, sql, params?)` executes INSERT/UPDATE/DELETE/DDL and returns `{changes, lastId}`. Like `sqlite.query`, it runs exactly one statement: SQL with another statement after the first (`"SELECT 1; DROP TABLE t"`) is an error rather than having the rest silently ignored, so make one call per statement. A trailing `;` or comment is fine.
 
 ```praia
 let result = sqlite.run(db, "INSERT INTO users (name, age) VALUES (?, ?)", ["Ada", 36])

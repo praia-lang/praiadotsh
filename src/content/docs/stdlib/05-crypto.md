@@ -322,6 +322,8 @@ bytes.calcsize(">BHI")    // 7
 bytes.calcsize(">3B2Hd")  // 15
 ```
 
+A format can describe at most 16 MiB per field and 64 MiB in total; larger formats throw before anything is allocated. `unpack` checks the format's size against the data first, and `pack` refuses non-integer values outside the 64-bit range for integer fields.
+
 ### Byte conversion
 
 ```praia
