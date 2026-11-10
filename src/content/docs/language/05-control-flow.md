@@ -6,7 +6,7 @@ sidebar:
 
 ## if / elif / else
 
-Conditions are always wrapped in parentheses. Bodies use braces.
+Conditions are always wrapped in parentheses. Bodies use braces, or can be a single statement (see below).
 
 ```praia
 let score = 85
@@ -21,6 +21,31 @@ if (score >= 90) {
     print("F")
 }
 ```
+
+### Single-statement bodies
+
+A body that is a single statement can leave out the braces, as in C. This works for `if`/`elif`/`else`, `while`, `for` and the `else` of `ensure`:
+
+```praia
+if (score >= 90) print("A") elif (score >= 80) print("B") else print("C")
+
+if (done)
+    print("finished")
+else
+    print("still going")
+
+if (x < 0) x = -x; else x = x * 2   // a `;` before else/elif is allowed
+
+while (i < 5) i++
+for (item in items) print(item)
+```
+
+- The body is exactly one statement: `if (x) a() b()` is an error, and `b()` needs its own line or braces.
+- A declaration (`let`, `func`, `class`, `enum`, `use`, `export`, or a decorated `@... func`) needs braces, since its scope would end right away.
+- An `else` belongs to the nearest `if`, so `if (a) if (b) x() else y()` runs `y()` when `a` is truthy and `b` isn't.
+- `else if (...)` works too, but `elif` is the usual spelling.
+
+`match` arms, `try`/`catch`/`finally` and function bodies always need braces.
 
 ## match
 

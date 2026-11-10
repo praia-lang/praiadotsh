@@ -165,6 +165,15 @@ greet("Ada")    // hello Ada!
 greet(nil)      // no name provided
 ```
 
+With a single statement, the braces can go:
+
+```praia
+func half(n) {
+    ensure (n % 2 == 0) else return nil
+    return n / 2
+}
+```
+
 `ensure` is useful for input validation:
 
 ```praia
